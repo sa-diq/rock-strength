@@ -4,9 +4,9 @@ import pandas as pd
 import time
 
 # === USER SETTINGS ===
-image_path = 'fig8.png'  # Change to your image filename
-num_datasets = 2         # Set the number of datasets you want to extract
-dataset_names = ['Dataset 1', 'Dataset 2']  # Change as needed
+image_path = 'fig8.png'  
+num_sandstones = 2         
+sandstone_names = ['sandstone 1', 'sandstone 2']  
 
 # === MAIN SCRIPT ===
 img = mpimg.imread(image_path)
@@ -25,8 +25,8 @@ time.sleep(0.5)
 
 x1_pixel, y1_pixel = x_axis_pts[0]
 x2_pixel, y2_pixel = x_axis_pts[1]
-x1_data = float(input("Enter the data value for the first X axis point: "))
-x2_data = float(input("Enter the data value for the second X axis point: "))
+x1_data = float(input("Enter the data value for the first X-axis point: "))
+x2_data = float(input("Enter the data value for the second X-axis point: "))
 
 fig = plt.figure(figsize=(8, 8))
 ax = fig.add_subplot(111)
@@ -51,20 +51,20 @@ def pixel_to_data(x_pixel, y_pixel):
     return x_data, y_data
 
 # --- Data Point Extraction ---
-for i in range(num_datasets):
+for i in range(num_sandstones):
     plt.close('all')
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111)
     ax.imshow(img)
-    ax.set_title(f"Click on data points for {dataset_names[i]}.\nClose the window when done.")
-    print(f"Select points for {dataset_names[i]}. Click on all points, then close the window.")
+    ax.set_title(f"Click on data points for {sandstone_names[i]}.\nClose the window when done.")
+    print(f"Select points for {sandstone_names[i]}. Click on all points, then close the window.")
     pts = plt.ginput(n=-1, timeout=0)
     plt.close(fig)
     time.sleep(0.5)
     for x, y in pts:
         x_data, y_data = pixel_to_data(x, y)
         all_points.append({
-            'dataset': dataset_names[i],
+            'dataset': sandstone_names[i],
             'x_pixel': x,
             'y_pixel': y,
             'x_data': x_data,

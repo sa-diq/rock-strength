@@ -20,7 +20,7 @@ import os
 from datetime import datetime
 
 # --- CONFIG ---
-SAMPLE_IMAGE_PATH = os.path.join('figure', 'fig8.png')
+IMAGE_PATH = os.path.join('figure', 'fig8.png')
 
 
 def get_axis_calibration(axis_name, ax, img):
@@ -52,9 +52,9 @@ def pixel_to_real(coord, calib_x, calib_y):
 
 def main():
     # 1. Load image
-    img = cv2.imread(SAMPLE_IMAGE_PATH)
+    img = cv2.imread(IMAGE_PATH)
     if img is None:
-        print(f"Error: Could not load image at {SAMPLE_IMAGE_PATH}")
+        print(f"Error: Could not load image at {IMAGE_PATH}")
         return
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
@@ -96,7 +96,7 @@ def main():
 
     # 9. Save JSON metadata
     meta = {
-        'image': SAMPLE_IMAGE_PATH,
+        'image': IMAGE_PATH,
         'calibration': {
             'X': calib_x,
             'Y': calib_y
