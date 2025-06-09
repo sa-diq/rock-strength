@@ -13,6 +13,5 @@ def get_plot_characteristics():
     for sandstone_index in range(num_sandstones):
         name = input(f"Enter the name of sandstone {sandstone_index + 1}: ")
         sandstone_names.append(name.strip().title())
-
-    print(f"\nPlot name: {plot_name}")
-    print(f"\nSandstone names: {sandstone_names}")
+    
+    return plot_name, sandstone_names

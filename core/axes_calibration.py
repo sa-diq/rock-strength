@@ -41,3 +41,4 @@ def calibrate_axes(img):
         return x_data, y_data
 
     return pixel_to_data
+
