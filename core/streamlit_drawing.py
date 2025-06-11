@@ -16,7 +16,7 @@ def get_click_coordinates(image, instructions, key, stroke_width=3):
         drawing_mode="point",
         key=key
     )
-    
+  
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         return [
             (obj["left"], obj["top"])
