@@ -311,7 +311,7 @@ def browse_page():
         
         # Display plots in a nice format
         for plot in plots:
-            with st.expander(f"📊 {plot['plot_name']} ({plot['created_at'].strftime('%Y-%m-%d %H:%M')})"):
+            with st.expander(f"📊 {plot['plot_name']} ({plot['created_at'].strftime('%Y-%m-%d %H:%M') if plot['created_at'] else 'Unknown date'})"):
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
@@ -321,12 +321,47 @@ def browse_page():
                     st.write(f"**Total data points:** {plot['total_points']}")
                 
                 with col2:
-                    if st.button(f"View Data", key=f"view_{plot['id']}"):
+                    # View data button
+                    view_key = f"view_{plot['id']}"
+                    if st.button("View Data", key=view_key):
+                        st.session_state[f"show_data_{plot['id']}"] = True
+                    
+                    # Delete button with confirmation
+                    delete_key = f"delete_{plot['id']}"
+                    confirm_key = f"confirm_delete_{plot['id']}"
+                    
+                    if st.session_state.get(confirm_key, False):
+                        # Show confirmation state
+                        st.warning("⚠️ Click again to confirm deletion")
+                        if st.button("🗑️ Confirm Delete", key=f"confirm_{plot['id']}", type="secondary"):
+                            try:
+                                db_manager.delete_plot(plot['id'])
+                                st.success("Plot deleted successfully!")
+                                # Reset confirmation state
+                                st.session_state[confirm_key] = False
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error deleting plot: {e}")
+                                st.session_state[confirm_key] = False
+                        
+                        # Cancel button
+                        if st.button("Cancel", key=f"cancel_{plot['id']}"):
+                            st.session_state[confirm_key] = False
+                            st.rerun()
+                    else:
+                        # Normal delete button
+                        if st.button("Delete", key=delete_key, type="secondary"):
+                            st.session_state[confirm_key] = True
+                            st.rerun()
+                
+                # Show data if requested
+                if st.session_state.get(f"show_data_{plot['id']}", False):
+                    try:
                         plot_data = db_manager.get_plot_data(plot['id'])
-                        if plot_data:
+                        if plot_data and plot_data['data_points']:
                             st.write("### Data Points")
                             df = pd.DataFrame(plot_data['data_points'])
-                            st.dataframe(df)
+                            st.dataframe(df, use_container_width=True)
                             
                             # Download option
                             csv = df.to_csv(index=False).encode('utf-8')
@@ -337,18 +372,15 @@ def browse_page():
                                 mime="text/csv",
                                 key=f"download_{plot['id']}"
                             )
-                    
-                    if st.button(f"Delete", key=f"delete_{plot['id']}", type="secondary"):
-                        if st.session_state.get(f"confirm_delete_{plot['id']}", False):
-                            try:
-                                db_manager.delete_plot(plot['id'])
-                                st.success("Plot deleted successfully!")
+                            
+                            # Hide data button
+                            if st.button("Hide Data", key=f"hide_{plot['id']}"):
+                                st.session_state[f"show_data_{plot['id']}"] = False
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Error deleting plot: {e}")
                         else:
-                            st.session_state[f"confirm_delete_{plot['id']}"] = True
-                            st.warning("Click delete again to confirm")
+                            st.warning("No data points found for this plot")
+                    except Exception as e:
+                        st.error(f"Error loading plot data: {e}")
     
     except Exception as e:
         st.error(f"Error retrieving plots: {e}")
