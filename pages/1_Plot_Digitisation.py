@@ -11,8 +11,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from core.calibrate_axes_streamlit import calibrate_axes_streamlit
 from core.extract_points_streamlit import extract_points_streamlit
 from core.database import db_manager
+from navigation import create_navigation
 
 st.set_page_config(page_title="Digitise Plots", page_icon="🔬", layout="wide")
+
+# Initialize custom navigation
+create_navigation()
 
 def init_session_state():
     """Initialize session state for digitization workflow"""
@@ -135,7 +139,7 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
     try:
         img_pil = Image.open(uploaded_file)
-        st.image(img_pil, caption="Uploaded Plot", use_column_width=True)
+        st.image(img_pil, caption="Uploaded Plot", use_container_width=True)
     except Exception as e:
         st.error(f"Error loading image: {e}")
         st.stop()

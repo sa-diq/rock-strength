@@ -3,12 +3,18 @@ import sys
 import streamlit as st
 import pandas as pd
 
+from navigation import create_navigation
+from core.database import db_manager
+
 # Add the project root to the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from core.database import db_manager
 
-st.set_page_config(page_title="Browse Data", page_icon="📚", layout="wide")
+
+st.set_page_config(page_title="Data Management", page_icon="📚", layout="wide")
+
+# Initialize navigation
+create_navigation()
 
 def format_timestamp(timestamp):
     """Format timestamp for display"""
@@ -23,7 +29,7 @@ def display_plot_card(plot):
     
     with st.expander(f"{plot_title} ({format_timestamp(plot['created_at'])})"):
         # Plot information
-        col1, col2 = st.columns([2, 1])
+        col1, col2 = st.columns([3, 1])
         
         with col1:
             st.markdown(f"""
@@ -32,8 +38,8 @@ def display_plot_card(plot):
             **🏷️ Identifier:** {plot['plot_identifier']}  
             **📏 X-axis range:** {plot['x_axis_range'] or 'Not specified'}  
             **📏 Y-axis range:** {plot['y_axis_range'] or 'Not specified'}  
-            **🪨 Sandstones:** {plot['sandstone_count']}  
-            **📍 Total data points:** {plot['total_points']}  
+            **🪨 Number of Sandstones:** {plot['sandstone_count']}  
+            **📍 Total Data Points:** {plot['total_points']}  
             """)
         
         with col2:
@@ -90,9 +96,9 @@ def display_plot_card(plot):
                     with col1:
                         st.metric("Total Points", len(df))
                     with col2:
-                        st.metric("P Range (MPa)", f"{df['p_mpa'].min():.1f} - {df['p_mpa'].max():.1f}")
+                        st.metric("P(MPa)", f"{df['p_mpa'].min():.1f} - {df['p_mpa'].max():.1f}")
                     with col3:
-                        st.metric("Q Range (MPa)", f"{df['q_mpa'].min():.1f} - {df['q_mpa'].max():.1f}")
+                        st.metric("Q(MPa)", f"{df['q_mpa'].min():.1f} - {df['q_mpa'].max():.1f}")
                     
                     # Data table
                     st.dataframe(df, use_container_width=True)
@@ -150,7 +156,7 @@ try:
         with col1:
             search_term = st.text_input(
                 "🔍 Search plots", 
-                placeholder="Search by DOI, figure number, or identifier...",
+                placeholder="Search by DOI, figure number",
                 help="Filter plots by DOI, figure number, or plot identifier"
             )
         with col2:

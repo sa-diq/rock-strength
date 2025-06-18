@@ -4,12 +4,16 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+from core.database import db_manager
+from navigation import create_navigation
+
 # Add the project root to the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from core.database import db_manager
-
 st.set_page_config(page_title="Statistics", page_icon="📊", layout="wide")
+
+# Initialize navigation
+create_navigation()
 
 def get_database_analytics():
     """Get comprehensive database analytics"""

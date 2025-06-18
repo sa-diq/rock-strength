@@ -6,6 +6,7 @@ import streamlit as st
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from core.database import init_database
+from navigation import create_navigation
 
 # Page configuration
 st.set_page_config(
@@ -14,6 +15,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize navigation
+create_navigation()
+
+
 # Initialize database on app startup
 @st.cache_resource
 def initialize_database():
@@ -48,11 +54,11 @@ This tool allows you to digitize Q-P plots from research papers and extract nume
 - **📚 Data Management**: View and manage your digitised plots
 - **📊 Analytics**: Monitor your digitization progress
 
-### Getting Started
+**Getting Started**
 1. Use the navigation sidebar to select a page
-2. Start with **Digitize** to process your first plot
-3. Use **Browse Data** to manage your digitized plots
-4. Check **Statistics** to see your progress
+2. Start with **Plot Digitisation** to process your first plot
+3. Use **Data Management** to manage your digitised plots
+4. Check **Analytics** to see your progress
 
 ### Database Status
 """)
