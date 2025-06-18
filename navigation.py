@@ -16,7 +16,7 @@ def create_navigation():
     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     
     with col1:
-        st.page_link("Home.py", label="Home", icon="🏠")
+        st.page_link("app.py", label="Home", icon="🏠")
     
     with col2:
         st.page_link("pages/1_Plot_Digitisation.py", label="Digitise Plots", icon="📊")
@@ -39,7 +39,7 @@ def create_simple_navigation():
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
-        st.page_link("Home.py", label="Home", icon="🏠")
+        st.page_link("app.py", label="Home", icon="🏠")
     
     with col2:
         st.page_link("pages/1_Plot_Digitisation.py", label="Digitize", icon="📊")
