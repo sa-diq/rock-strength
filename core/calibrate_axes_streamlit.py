@@ -85,15 +85,31 @@ def calibrate_axes_streamlit(image_pil):
                         # Create transformation function with error handling
                         def pixel_to_data(x_pixel, y_pixel):
                             try:
+                                # Check for division by zero before calculation
+                                x_pixel_diff = x2_pixel - x1_pixel
+                                y_pixel_diff = y4_pixel - y3_pixel
+                                
+                                if abs(x_pixel_diff) < 0.1:  # Essentially zero
+                                    st.error("❌ X-axis calibration error: Points are identical")
+                                    return 0, 0
+                                
+                                if abs(y_pixel_diff) < 0.1:  # Essentially zero  
+                                    st.error("❌ Y-axis calibration error: Points are identical")
+                                    return 0, 0
+                                
                                 # Linear interpolation for X
-                                x_data = x1_data + (x_pixel - x1_pixel) * (x2_data - x1_data) / (x2_pixel - x1_pixel)
+                                x_data = x1_data + (x_pixel - x1_pixel) * (x2_data - x1_data) / x_pixel_diff
                                 # Linear interpolation for Y
-                                y_data = y1_data + (y_pixel - y3_pixel) * (y2_data - y1_data) / (y4_pixel - y3_pixel)
+                                y_data = y1_data + (y_pixel - y3_pixel) * (y2_data - y1_data) / y_pixel_diff
+                                
                                 return x_data, y_data
+                                
                             except ZeroDivisionError:
                                 st.error("❌ Calibration error: Division by zero. Please recalibrate your axes.")
                                 return 0, 0
-                        
+                            except Exception as e:
+                                st.error(f"❌ Calibration error: {e}")
+                                return 0, 0
                         st.success("✅ Axes calibration complete!")
                         st.write("**Calibration Summary:**")
                         st.write(f"- X-axis: {x1_data} to {x2_data} (pixel range: {x1_pixel:.1f} to {x2_pixel:.1f})")
