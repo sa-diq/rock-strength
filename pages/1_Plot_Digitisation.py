@@ -11,8 +11,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.calibrate_axes_streamlit import calibrate_axes_streamlit
 from core.extract_points_streamlit import extract_points_streamlit
-from core.recreate_plot import create_validation_overlay, calculate_validation_metrics, display_validation_summary
 from core.database import db_manager
+from core.recreate_plot import (
+    create_single_sandstone_validation_overlay, 
+    aggregate_validated_sandstones_for_save,
+    create_progress_indicator
+)
 from navigation import create_navigation
 
 st.set_page_config(page_title="Digitise Plots", page_icon="🔬", layout="wide")
@@ -21,13 +25,18 @@ st.set_page_config(page_title="Digitise Plots", page_icon="🔬", layout="wide")
 create_navigation()
 
 def init_session_state():
-    """Initialize session state for digitization workflow"""
+    """Initialize session state for per-sandstone digitization workflow"""
     defaults = {
         "step": 1,
-        "sandstone_index": 0,
-        "data_points": [],
+        # Per-sandstone workflow state
+        "current_sandstone_index": 0,
+        "sandstone_validation_status": "extract",  # "extract" | "validate" | "confirmed"
+        "validated_sandstones": [],  # List of completed sandstone data
+        "current_sandstone_name": "",
+        "current_sandstone_points": [],
+        # Existing state (keep for compatibility)
         "pixel_to_data": None,
-        "sandstone_names": []
+        "total_sandstones": 0
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -51,8 +60,12 @@ def save_uploaded_image(uploaded_file, plot_identifier):
 
 def reset_digitization():
     """Reset all digitization session state"""
-    keys_to_reset = ["step", "sandstone_index", "data_points", "pixel_to_data", 
-                     "sandstone_names", "doi", "figure_number", "plot_identifier", "num_sandstones", "uploaded_file"]
+    keys_to_reset = [
+        "step", "current_sandstone_index", "sandstone_validation_status", 
+        "validated_sandstones", "current_sandstone_name", "current_sandstone_points",
+        "pixel_to_data", "doi", "figure_number", "plot_identifier", 
+        "total_sandstones", "uploaded_file"
+    ]
     for key in keys_to_reset:
         if key in st.session_state:
             del st.session_state[key]
@@ -85,35 +98,89 @@ def go_back():
     if st.session_state.step == 2:
         st.session_state.step = 1
     elif st.session_state.step == 3:
-        st.session_state.step = 2
-        st.session_state.sandstone_index = 0
-        st.session_state.data_points = []
-        st.session_state.sandstone_names = []
-    elif st.session_state.step == 4:  # Back from validation
+        # Handle per-sandstone back navigation
+        if st.session_state.sandstone_validation_status == "validate":
+            # Back to extract for current sandstone
+            st.session_state.sandstone_validation_status = "extract"
+        elif st.session_state.sandstone_validation_status == "extract":
+            if st.session_state.current_sandstone_index > 0:
+                # Back to previous sandstone (confirmed state)
+                st.session_state.current_sandstone_index -= 1
+                st.session_state.sandstone_validation_status = "confirmed"
+                # Load previous sandstone data
+                prev_sandstone = st.session_state.validated_sandstones[-1]
+                st.session_state.current_sandstone_name = prev_sandstone['name']
+                st.session_state.current_sandstone_points = prev_sandstone['points']
+            else:
+                # Back to calibration
+                st.session_state.step = 2
+    elif st.session_state.step == 4:
+        # This shouldn't happen much since we auto-save
         st.session_state.step = 3
-        if st.session_state.sandstone_index > 0:
-            st.session_state.sandstone_index -= 1
-            if st.session_state.sandstone_names:
-                last_name = st.session_state.sandstone_names[-1]
-                st.session_state.data_points = [
-                    point for point in st.session_state.data_points 
-                    if point.get('dataset') != last_name
-                ]
-                st.session_state.sandstone_names.pop()
-    elif st.session_state.step == 5:  # Back from save
-        st.session_state.step = 4
 
-def go_back_one_sandstone():
-    """Handle going back one sandstone in step 3"""
-    if st.session_state.sandstone_index > 0:
-        st.session_state.sandstone_index -= 1
-        if st.session_state.sandstone_names:
-            last_name = st.session_state.sandstone_names[-1]
-            st.session_state.data_points = [
-                point for point in st.session_state.data_points 
-                if point.get('dataset') != last_name
-            ]
-            st.session_state.sandstone_names.pop()
+def proceed_to_next_sandstone():
+    """Move to next sandstone or complete workflow"""
+    # Save current sandstone to validated list
+    current_sandstone_data = {
+        'name': st.session_state.current_sandstone_name,
+        'points': st.session_state.current_sandstone_points.copy()
+    }
+    
+    # Check if we're updating existing or adding new
+    existing_index = None
+    for i, sandstone in enumerate(st.session_state.validated_sandstones):
+        if sandstone['name'] == current_sandstone_data['name']:
+            existing_index = i
+            break
+    
+    if existing_index is not None:
+        # Update existing
+        st.session_state.validated_sandstones[existing_index] = current_sandstone_data
+    else:
+        # Add new
+        st.session_state.validated_sandstones.append(current_sandstone_data)
+    
+    # Check if this was the last sandstone
+    if st.session_state.current_sandstone_index + 1 >= st.session_state.total_sandstones:
+        # LAST SANDSTONE: Auto-save and complete
+        try:
+            # Aggregate all validated data
+            all_data_points = aggregate_validated_sandstones_for_save(st.session_state.validated_sandstones)
+            
+            # Save image file
+            image_path = save_uploaded_image(
+                st.session_state.uploaded_file, 
+                st.session_state.plot_identifier
+            )
+            
+            # Prepare plot data for database
+            plot_data = {
+                'doi': st.session_state.doi,
+                'figure_number': st.session_state.figure_number,
+                'plot_identifier': st.session_state.plot_identifier,
+                'image_path': image_path,
+                'x_axis_range': f"{st.session_state.get('x1_data', 0)} to {st.session_state.get('x2_data', 0)}",
+                'y_axis_range': f"{st.session_state.get('y1_data', 0)} to {st.session_state.get('y2_data', 0)}",
+                'data_points': all_data_points
+            }
+            
+            # Save to database
+            plot_id = db_manager.save_complete_plot(plot_data)
+            st.session_state.final_plot_id = plot_id
+            st.session_state.step = 4  # Go to completion page
+            
+        except Exception as e:
+            st.error(f"❌ Error saving plot: {e}")
+            # Don't advance step, keep data safe
+            return False
+    else:
+        # NEXT SANDSTONE: Advance to next
+        st.session_state.current_sandstone_index += 1
+        st.session_state.sandstone_validation_status = "extract"
+        st.session_state.current_sandstone_name = ""
+        st.session_state.current_sandstone_points = []
+    
+    return True
 
 # Initialize session state
 init_session_state()
@@ -127,9 +194,8 @@ step = st.session_state.get('step', 1)
 progress_text = {
     1: "Step 1: Upload & Configure",
     2: "Step 2: Calibrate Axes", 
-    3: "Step 3: Extract Data Points",
-    4: "Step 4: Validate Extraction",
-    5: "Step 5: Save Results"
+    3: "Step 3: Extract & Validate Data Points",
+    4: "Step 4: Completion"
 }
 
 st.info(f"**{progress_text.get(step, 'Unknown Step')}**")
@@ -149,7 +215,7 @@ if uploaded_file:
         st.error(f"Error loading image: {e}")
         st.stop()
 
-    # Step 1: Enter metadata
+    # Step 1: Enter metadata (unchanged from original)
     if st.session_state.step == 1:
         st.markdown("### 📝 Publication Information")
         
@@ -179,21 +245,18 @@ if uploaded_file:
                 key="num_sandstones_input"
             )
         
-        # DOI validation and duplicate checking
+        # DOI validation and duplicate checking (unchanged)
         validation_messages = []
         duplicate_warning = False
         plot_identifier = None
         
         if doi and figure_number:
-            # Validate DOI format
             if not validate_doi(doi):
                 validation_messages.append("⚠️ Invalid DOI format. Please check your DOI.")
             else:
-                # Generate plot identifier
                 clean_doi = format_doi_display(doi)
                 plot_identifier = db_manager.generate_plot_identifier(clean_doi, figure_number)
                 
-                # Check for duplicates
                 try:
                     if db_manager.check_plot_exists(clean_doi, figure_number):
                         validation_messages.append(f"⚠️ Plot already exists: {clean_doi} Figure {figure_number}")
@@ -224,12 +287,12 @@ if uploaded_file:
                 st.session_state.doi = clean_doi
                 st.session_state.figure_number = figure_number
                 st.session_state.plot_identifier = plot_identifier
-                st.session_state.num_sandstones = num_sandstones
+                st.session_state.total_sandstones = num_sandstones
                 st.session_state.uploaded_file = uploaded_file
                 st.session_state.step = 2
                 st.rerun()
 
-    # Step 2: Calibrate Axes
+    # Step 2: Calibrate Axes (unchanged from original)
     elif st.session_state.step == 2:
         st.markdown("### 📏 Axis Calibration")
         
@@ -249,260 +312,199 @@ if uploaded_file:
                     st.session_state.step = 3
                     st.rerun()
 
-    # Step 3: Extract points for each sandstone
+    # Step 3: Per-Sandstone Extraction and Validation (COMPLETELY NEW)
     elif st.session_state.step == 3:
-        st.markdown("### 📍 Data Point Extraction")
-        
-        current_idx = st.session_state.sandstone_index
-        total_sandstones = st.session_state.num_sandstones
+        st.markdown("### 📍 Per-Sandstone Data Extraction")
         
         # Progress indicator
-        progress = (current_idx + 1) / total_sandstones
-        st.progress(progress, text=f"Sandstone {current_idx + 1} of {total_sandstones}")
-        
-        sandstone_name = st.text_input(
-            f"Name for Sandstone {current_idx + 1}:", 
-            placeholder="e.g., Berea_Sandstone",
-            key=f"sandstone_name_{current_idx}"
+        create_progress_indicator(
+            st.session_state.current_sandstone_index,
+            st.session_state.total_sandstones,
+            [s['name'] for s in st.session_state.validated_sandstones] + [st.session_state.current_sandstone_name],
+            st.session_state.validated_sandstones
         )
         
-        points = None
-        confirm_button_enabled = False
+        current_sandstone_num = st.session_state.current_sandstone_index + 1
+        status = st.session_state.sandstone_validation_status
         
-        if sandstone_name:
-            if sandstone_name in st.session_state.sandstone_names:
-                st.error("❌ Sandstone name already used. Please choose a different name.")
-            else:
-                points = extract_points_streamlit(
-                    img_pil, 
-                    sandstone_name, 
-                    st.session_state.pixel_to_data
-                )
-                
-                if points:
-                    st.success(f"✅ {len(points)} points extracted for {sandstone_name}")
-                    confirm_button_enabled = True
-        
-        # Navigation buttons
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("⬅️ Back to Calibration"):
-                go_back()
-                st.rerun()
-        
-        with col2:
-            if current_idx > 0:
-                if st.button("↩️ Previous Sandstone"):
-                    go_back_one_sandstone()
-                    st.rerun()
-        
-        with col3:
-            if confirm_button_enabled:
-                if st.button(f"✅ Confirm {sandstone_name}", type="primary"):
-                    st.session_state.data_points.extend(points)
-                    st.session_state.sandstone_names.append(sandstone_name)
-                    st.session_state.sandstone_index += 1
+        if status == "extract":
+            # EXTRACT PHASE: Get sandstone name and extract points
+            st.markdown(f"#### 🪨 Sandstone {current_sandstone_num} - Point Extraction")
+            
+            # Get sandstone name
+            sandstone_name = st.text_input(
+                f"Name for Sandstone {current_sandstone_num}:", 
+                value=st.session_state.current_sandstone_name,
+                placeholder="e.g., Berea_Sandstone",
+                key=f"sandstone_name_{current_sandstone_num}"
+            )
+            
+            if sandstone_name != st.session_state.current_sandstone_name:
+                st.session_state.current_sandstone_name = sandstone_name
+                st.session_state.current_sandstone_points = []  # Reset points when name changes
+            
+            points = None
+            extract_button_enabled = False
+            
+            if sandstone_name:
+                # Check for duplicate names
+                existing_names = [s['name'] for s in st.session_state.validated_sandstones]
+                if sandstone_name in existing_names:
+                    st.error("❌ Sandstone name already used. Please choose a different name.")
+                else:
+                    # Extract points
+                    points = extract_points_streamlit(
+                        img_pil, 
+                        sandstone_name, 
+                        st.session_state.pixel_to_data
+                    )
                     
-                    if st.session_state.sandstone_index >= total_sandstones:
-                        st.session_state.step = 4  # Go to validation step
-                    
-                    st.rerun()
-            else:
-                st.button("✅ Confirm Points", disabled=True)
-
-    # Step 4: Validation
-    elif st.session_state.step == 4:
-        st.markdown("### 🔍 Validate Extracted Data")
-        
-        if st.session_state.data_points:
-            # Create and display validation overlay
-            try:
-                validation_fig = create_validation_overlay(
-                    img_pil, 
-                    st.session_state.data_points,
-                    st.session_state.sandstone_names
-                )
-                st.pyplot(validation_fig)
-                plt.close(validation_fig)  # Prevent memory leaks
-                
-            except Exception as e:
-                st.error(f"❌ Error creating validation overlay: {e}")
-                st.write("**Extracted Points Data:**")
-                st.write(st.session_state.data_points[:5])  # Show first 5 for debugging
+                    if points:
+                        st.session_state.current_sandstone_points = points
+                        st.success(f"✅ {len(points)} points extracted for {sandstone_name}")
+                        extract_button_enabled = True
             
-            # Calculate and display validation metrics
-            try:
-                metrics = calculate_validation_metrics(
-                    st.session_state.data_points,
-                    st.session_state.sandstone_names
-                )
-                display_validation_summary(metrics)
-                
-            except Exception as e:
-                st.error(f"❌ Error calculating validation metrics: {e}")
-            
-            # Optional debug mode
-            # with st.expander("🔧 Debug: Canvas Alignment Issues"):
-            #     st.write("**Use this if extracted points seem offset from actual data points**")
-                
-            #     if st.button("Show Canvas Alignment Debug"):
-            #         test_points = [(point['x_pixel'], point['y_pixel']) for point in st.session_state.data_points]
-            #         debug_canvas_alignment(img_pil, test_points)
-                
-                st.markdown("""
-                **What to look for:**
-                - Red + markers should be exactly on the data symbols
-                - If they're consistently offset (left/right/up/down), that's the canvas alignment issue
-                - This helps identify systematic coordinate misalignment
-                """)
-            
-            # MOVE THIS OUTSIDE THE EXPANDER:
-            # Validation question
-            st.markdown("---")
-            st.markdown("#### 🔍 Visual Validation")
-            st.write("**Do the extracted points (shown as + markers) align accurately with the data points in the original plot?**")
-            
-            # Validation controls
+            # Navigation buttons
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                if st.button("⬅️ Back to Point Extraction"):
+                if st.button("⬅️ Back"):
                     go_back()
                     st.rerun()
             
             with col2:
-                if st.button("❌ No - Re-extract Points", help="Points don't look accurate"):
-                    # Go back to last sandstone for re-extraction
-                    if st.session_state.sandstone_index > 0:
-                        st.session_state.sandstone_index -= 1
-                        if st.session_state.sandstone_names:
-                            last_name = st.session_state.sandstone_names[-1]
-                            st.session_state.data_points = [
-                                point for point in st.session_state.data_points 
-                                if point.get('dataset') != last_name
-                            ]
-                            st.session_state.sandstone_names.pop()
-                    st.session_state.step = 3
-                    st.rerun()
+                if st.session_state.current_sandstone_index > 0:
+                    if st.button("↩️ Previous Sandstone"):
+                        go_back()
+                        st.rerun()
             
             with col3:
-                if st.button("✅ Yes - Points Look Good", type="primary", help="Proceed to save"):
-                    st.session_state.step = 5  # Go to save step
-                    st.rerun()
+                if extract_button_enabled:
+                    if st.button("➡️ Validate Points", type="primary"):
+                        st.session_state.sandstone_validation_status = "validate"
+                        st.rerun()
+                else:
+                    st.button("➡️ Validate Points", disabled=True)
         
-        else:
-            st.error("❌ No data points found for validation!")
-            if st.button("⬅️ Back to Point Extraction"):
-                go_back()
-                st.rerun()
-    # Step 5: Results and save
-    elif st.session_state.step == 5:
+        elif status == "validate":
+            # VALIDATE PHASE: Show validation overlay and get user confirmation
+            st.markdown(f"#### 🔍 Sandstone {current_sandstone_num} - Validation")
+            
+            if st.session_state.current_sandstone_points:
+                # Create and display validation overlay
+                try:
+                    validation_fig = create_single_sandstone_validation_overlay(
+                        img_pil, 
+                        st.session_state.current_sandstone_name,
+                        st.session_state.current_sandstone_points
+                    )
+                    st.pyplot(validation_fig)
+                    plt.close(validation_fig)  # Prevent memory leaks
+                    
+                except Exception as e:
+                    st.error(f"❌ Error creating validation overlay: {e}")
+                
+                # Validation question
+                st.markdown("---")
+                st.markdown("#### 🔍 Visual Validation")
+                st.write(f"**Do the extracted points (+ markers) accurately represent the {st.session_state.current_sandstone_name} data points?**")
+                
+                # Validation controls
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("⬅️ Back to Extract"):
+                        st.session_state.sandstone_validation_status = "extract"
+                        st.rerun()
+                
+                with col2:
+                    if st.button("❌ Re-extract Points", help="Points don't look accurate"):
+                        st.session_state.sandstone_validation_status = "extract"
+                        st.session_state.current_sandstone_points = []
+                        st.rerun()
+                
+                with col3:
+                    next_action = "Save All & Complete" if current_sandstone_num >= st.session_state.total_sandstones else f"Next: Sandstone {current_sandstone_num + 1}"
+                    if st.button(f"✅ {next_action}", type="primary", help="Points look good"):
+                        if proceed_to_next_sandstone():
+                            st.rerun()
+            
+            else:
+                st.error("❌ No points to validate!")
+                if st.button("⬅️ Back to Extract"):
+                    st.session_state.sandstone_validation_status = "extract"
+                    st.rerun()
+
+    # Step 4: Completion Page (NEW)
+    elif st.session_state.step == 4:
         st.markdown("### 🎉 Digitization Complete!")
         
-        if st.session_state.data_points:
-            # Show summary
-            df = pd.DataFrame(st.session_state.data_points)
-            
-            # Display plot information
-            st.markdown("#### 📊 Plot Information")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**DOI:** {st.session_state.doi}")
-                st.write(f"**Figure:** {st.session_state.figure_number}")
-            with col2:
-                st.write(f"**Identifier:** {st.session_state.plot_identifier}")
-                st.write(f"**Sandstones:** {len(st.session_state.sandstone_names)}")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("📊 Total Points", len(df))
-            with col2:
-                st.metric("🪨 Sandstone Datasets", len(st.session_state.sandstone_names))
-            with col3:
-                st.metric("📏 P Range", f"{df['P(MPa)'].min():.1f} - {df['P(MPa)'].max():.1f}")
-            
-            # Data preview
-            st.markdown("#### 📋 Data Preview")
-            st.dataframe(df, use_container_width=True)
-            
-            # Action buttons
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                # Download CSV
+        # Success message
+        st.success("✅ All sandstones have been successfully digitized and saved!")
+        
+        # Summary information
+        total_points = sum(len(s['points']) for s in st.session_state.validated_sandstones)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Plot Saved", f"ID: {st.session_state.get('final_plot_id', 'Unknown')}")
+        with col2:
+            st.metric("Sandstone Datasets", len(st.session_state.validated_sandstones))
+        with col3:
+            st.metric("Total Data Points", total_points)
+        
+        # Show completed sandstones
+        st.markdown("#### 📊 Completed Sandstones")
+        for i, sandstone in enumerate(st.session_state.validated_sandstones):
+            st.write(f"**{i+1}. {sandstone['name']}**: {len(sandstone['points'])} points")
+        
+        # Action buttons
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Download all data as CSV - Made more prominent
+            if st.session_state.validated_sandstones:
+                all_points = aggregate_validated_sandstones_for_save(st.session_state.validated_sandstones)
+                df = pd.DataFrame(all_points)
                 csv = df.to_csv(index=False).encode('utf-8')
-                filename = f"{st.session_state.plot_identifier}_data.csv"
+                filename = f"{st.session_state.plot_identifier}_complete_data.csv"
                 st.download_button(
-                    "📥 Download CSV", 
+                    "📥 Download Digitised Plot", 
                     csv, 
                     file_name=filename,
                     mime="text/csv",
-                    help="Download data as CSV file"
+                    help="Download data as CSV file",
+                    type="secondary"
                 )
-            
-            with col2:
-                # Save to database
-                if st.button("💾 Save to Database", type="primary"):
-                    try:
-                        # Save image file
-                        image_path = save_uploaded_image(
-                            st.session_state.uploaded_file, 
-                            st.session_state.plot_identifier
-                        )
-                        
-                        # Prepare plot data
-                        plot_data = {
-                            'doi': st.session_state.doi,
-                            'figure_number': st.session_state.figure_number,
-                            'plot_identifier': st.session_state.plot_identifier,
-                            'image_path': image_path,
-                            'x_axis_range': f"{st.session_state.get('x1_data', 0)} to {st.session_state.get('x2_data', 0)}",
-                            'y_axis_range': f"{st.session_state.get('y1_data', 0)} to {st.session_state.get('y2_data', 0)}",
-                            'data_points': st.session_state.data_points
-                        }
-                        
-                        plot_id = db_manager.save_complete_plot(plot_data)
-                        st.success(f"✅ Saved to database! Plot ID: {plot_id}")
-                        
-                    except Exception as e:
-                        st.error(f"❌ Error saving: {e}")
-            
-            with col3:
-                # Start new digitization
-                if st.button("🔄 Start New Plot"):
-                    reset_digitization()
-                    st.rerun()
-            
-            # Back button
-            st.markdown("---")
-            if st.button("⬅️ Back to Validation"):
-                go_back()
+        
+        with col2:
+            # Start new digitization
+            if st.button("🔄 Digitize Another Plot", type="primary"):
+                reset_digitization()
                 st.rerun()
         
-        else:
-            st.error("❌ No data points found!")
-            if st.button("⬅️ Back to Point Extraction"):
-                go_back()
-                st.rerun()
+        # Additional info
+        st.markdown("---")
+        st.info("💡 **Tip**: Use the 'Data Management' tab above to view, search, and manage all your digitized plots.")
 
 else:
     st.info("👆 Please upload a Q-P plot image to begin digitization")
     
-    # Show helpful instructions
+    # Show helpful instructions (unchanged from original)
     st.markdown("""
     ### 📋 Instructions
     1. **Upload** a clear image of your Q-P plot
     2. **Enter** DOI and figure number from the research paper  
     3. **Calibrate** by clicking on known axis points
-    4. **Extract** data points for each sandstone
-    5. **Save** your digitized data
+    4. **Extract & Validate** data points for each sandstone individually
+    5. **Auto-save** occurs after validating the last sandstone
     
     ### 💡 Tips
     - Use high-resolution images for better accuracy
     - Enter complete DOI (e.g., 10.1016/j.jrmge.2023.02.015)
     - Include figure letters/numbers (e.g., 1a, 2b, 3)
     - Ensure axes are clearly visible in the image
+    - **New**: Each sandstone is validated individually for better quality control
     
     ### 📄 DOI Format Examples
     - `10.1016/j.jrmge.2023.02.015`

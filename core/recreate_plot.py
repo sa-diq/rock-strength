@@ -1,8 +1,10 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import streamlit as st
 from core.database import db_manager
 import numpy as np
+from PIL import Image
 
 def get_plot_data_for_recreation(plot_id: int):
     """
@@ -264,7 +266,7 @@ def get_summary_statistics(plot_id: int):
     })
 
 # ============================================================================
-# NEW VALIDATION FUNCTIONS (For workflow validation step)
+# WORKFLOW VALIDATION FUNCTIONS - v1.0 (For all-sandstone validation)
 # ============================================================================
 
 def create_validation_overlay(image_pil, data_points, sandstone_names):
@@ -461,6 +463,185 @@ def display_validation_summary(metrics):
                 st.write(f"**P range:** {data['p_range']} MPa")
                 st.write(f"**Q range:** {data['q_range']} MPa")
                 st.write(f"**Avg Q/P ratio:** {data['avg_q_p_ratio']:.2f}")
+
+# ============================================================================
+# PER-SANDSTONE VALIDATION FUNCTIONS - (For individual sandstone validation)
+# ============================================================================
+
+def create_single_sandstone_validation_overlay(image_pil, sandstone_name, sandstone_points):
+    """
+    Create validation overlay for a single sandstone dataset
+    Designed for per-sandstone validation workflow
+    
+    Args:
+        image_pil: PIL Image object of the original plot
+        sandstone_name: Name of the current sandstone
+        sandstone_points: List of point dictionaries for this sandstone only
+        
+    Returns:
+        matplotlib.figure.Figure: Figure object for Streamlit display
+    """
+    
+    # Create figure with good size for Streamlit
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    
+    # Display original image
+    ax.imshow(image_pil)
+    
+    # Single color for this sandstone (use consistent color scheme)
+    color = plt.cm.Set1(0)  # First color from Set1 colormap
+    
+    # Plot extracted points for this sandstone
+    for point in sandstone_points:
+        ax.scatter(
+            point['x_pixel'], 
+            point['y_pixel'],
+            color=color,
+            s=60,  # Reduced size
+            alpha=0.7,  # More transparent
+            marker='+',  # Cross marker
+            linewidths=1.5,  # Thinner lines
+            label=sandstone_name if point == sandstone_points[0] else None  # Label only once
+        )
+    
+    # Add legend
+    if sandstone_points:
+        ax.legend(loc='upper right')
+    
+    # Styling
+    ax.set_title(f'Validation: {sandstone_name} ({len(sandstone_points)} points)', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xlabel('Pixel X')
+    ax.set_ylabel('Pixel Y')
+    
+    # Add grid for reference
+    ax.grid(True, alpha=0.3)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    return fig
+
+def calculate_single_sandstone_metrics(sandstone_name, sandstone_points):
+    """
+    Calculate validation metrics for a single sandstone dataset
+    
+    Args:
+        sandstone_name: Name of the sandstone
+        sandstone_points: List of point dictionaries for this sandstone
+        
+    Returns:
+        dict: Validation metrics for this sandstone
+    """
+    
+    if not sandstone_points:
+        return {}
+    
+    # Convert to DataFrame for easier analysis
+    df = pd.DataFrame(sandstone_points)
+    
+    metrics = {
+        'sandstone_name': sandstone_name,
+        'point_count': len(sandstone_points),
+    }
+    
+    # P and Q value ranges
+    metrics['p_range'] = {
+        'min': df['P(MPa)'].min(),
+        'max': df['P(MPa)'].max(),
+        'span': df['P(MPa)'].max() - df['P(MPa)'].min(),
+        'mean': df['P(MPa)'].mean()
+    }
+    
+    metrics['q_range'] = {
+        'min': df['Q(MPa)'].min(),
+        'max': df['Q(MPa)'].max(), 
+        'span': df['Q(MPa)'].max() - df['Q(MPa)'].min(),
+        'mean': df['Q(MPa)'].mean()
+    }
+    
+    # Physical reasonableness checks
+    metrics['negative_p_count'] = (df['P(MPa)'] < 0).sum()
+    metrics['negative_q_count'] = (df['Q(MPa)'] < 0).sum()
+    
+    # Q/P ratio analysis (avoid division by zero)
+    valid_ratios = df['P(MPa)'] > 0.1
+    if valid_ratios.any():
+        q_p_ratios = df.loc[valid_ratios, 'Q(MPa)'] / df.loc[valid_ratios, 'P(MPa)']
+        metrics['q_p_ratio'] = {
+            'mean': q_p_ratios.mean(),
+            'max': q_p_ratios.max(),
+            'extreme_count': (q_p_ratios > 10).sum()
+        }
+    else:
+        metrics['q_p_ratio'] = {'mean': 0, 'max': 0, 'extreme_count': 0}
+    
+    return metrics
+
+def aggregate_validated_sandstones_for_save(validated_sandstones):
+    """
+    Aggregate all validated sandstone data for database save
+    Converts per-sandstone format back to full dataset format
+    
+    Args:
+        validated_sandstones: List of validated sandstone dictionaries
+        
+    Returns:
+        list: Combined data points ready for database save
+    """
+    
+    all_data_points = []
+    
+    for sandstone_data in validated_sandstones:
+        sandstone_name = sandstone_data['name']
+        points = sandstone_data['points']
+        
+        # Add sandstone name to each point and collect
+        for point in points:
+            point_copy = point.copy()
+            point_copy['dataset'] = sandstone_name  # Ensure dataset field is set
+            all_data_points.append(point_copy)
+    
+    return all_data_points
+
+def create_progress_indicator(current_index, total_sandstones, sandstone_names, validated_sandstones):
+    """
+    Create a visual progress indicator for per-sandstone workflow
+    
+    Args:
+        current_index: Index of current sandstone (0-based)
+        total_sandstones: Total number of sandstones
+        sandstone_names: List of all sandstone names (if available)
+        validated_sandstones: List of completed sandstone data
+        
+    Returns:
+        None (displays in Streamlit)
+    """
+    
+    progress_items = []
+    validated_names = [s['name'] for s in validated_sandstones]
+    
+    for i in range(total_sandstones):
+        if i < len(sandstone_names) and sandstone_names[i] in validated_names:
+            # Completed sandstone
+            name = sandstone_names[i] if i < len(sandstone_names) else f"Sandstone {i+1}"
+            progress_items.append(f"{name} ✅")
+        elif i == current_index:
+            # Current sandstone
+            name = sandstone_names[i] if i < len(sandstone_names) else f"Sandstone {i+1}"
+            progress_items.append(f"{name} 🔄")
+        else:
+            # Future sandstone
+            progress_items.append(f"Sandstone {i+1} ⏳")
+    
+    # Display progress
+    progress_text = " | ".join(progress_items)
+    st.info(f"**Progress:** {progress_text}")
+    
+    # Progress bar
+    completed_count = len(validated_sandstones)
+    progress_percentage = completed_count / total_sandstones
+    st.progress(progress_percentage, text=f"{completed_count} of {total_sandstones} sandstones completed")
 
 if __name__ == "__main__":
     pass
