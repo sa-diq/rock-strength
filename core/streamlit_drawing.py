@@ -1,5 +1,3 @@
-# streamlit_drawing.py - Complete fixed version with automatic compatibility patch
-
 # Apply compatibility patch before importing streamlit_drawable_canvas
 def patch_drawable_canvas():
     """Patch streamlit-drawable-canvas to work with modern Streamlit versions"""
@@ -32,22 +30,63 @@ from streamlit_drawable_canvas import st_canvas
 import streamlit as st
 import numpy as np
 
-def get_click_coordinates(image, instructions, key, stroke_width=3):
+def get_point_color_selector(key_prefix):
     """
-    Get click coordinates using the original drawable canvas - now with crosses!
+    Create a color selector for extraction points
+    
+    Args:
+        key_prefix: Unique prefix for the selectbox key
+        
+    Returns:
+        tuple: (color_hex, color_name) for the selected color
+    """
+    
+    # Define color options
+    color_options = {
+        "🔵 Blue": "#0066FF",
+        "🟢 Green": "#00AA00", 
+        "🟡 Yellow": "#FFD700",
+        "🟣 Purple": "#8A2BE2",
+        "🟠 Orange": "#FF8C00",
+        "🔴 Red": "#FF0000"
+    }
+    
+    # Default to blue (most visible on most plots)
+    selected_color_name = st.selectbox(
+        "🎨 Point Color:",
+        options=list(color_options.keys()),
+        index=0,  # Default to first option
+        key=f"{key_prefix}_color_selector",
+        help="Choose a color that contrasts well with your plot's data points"
+    )
+    
+    selected_color_hex = color_options[selected_color_name]
+    
+    return selected_color_hex, selected_color_name
+
+def get_click_coordinates(image, instructions, key):
+    """
+    Get click coordinates with improved visibility and color selection
     """
     st.write(instructions)
+    
+    # Color selector
+    point_color, color_name = get_point_color_selector(key)
+    
+    # Show color tip
+    st.info(f"💡 **Tip**: Using {color_name.split()[1]} points. Change color if they're hard to see on your plot.")
+    
     canvas_result = st_canvas(
-        fill_color="rgba(255, 0, 0, 0.1)",  # Very transparent fill
-        stroke_width=3,  # Thicker stroke for cross effect
-        stroke_color="#FF0000",
+        fill_color="rgba(255, 255, 255, 0.0)",  
+        stroke_width=2,  
+        stroke_color=point_color,  
         background_color="#eee",
         background_image=image,
         update_streamlit=True,
         height=image.height,
         width=image.width,
         drawing_mode="point",
-        point_display_radius=4,  # Smaller radius for cross-like appearance
+        point_display_radius=3,  
         key=key
     )
 
@@ -61,9 +100,12 @@ def get_click_coordinates(image, instructions, key, stroke_width=3):
 
 def get_click_coordinates_simple(image, instructions, key, max_points=None):
     """
-    Simplified version for calibration that auto-proceeds after reaching max_points
+    Simplified version for calibration with improved visibility and color selection
     """
     st.write(instructions)
+    
+    # Color selector
+    point_color, color_name = get_point_color_selector(key)
     
     # Show progress if max_points is specified
     if max_points:
@@ -73,16 +115,16 @@ def get_click_coordinates_simple(image, instructions, key, max_points=None):
             st.session_state[completion_key] = False
     
     canvas_result = st_canvas(
-        fill_color="rgba(255, 0, 0, 0.1)",  # Very transparent fill
-        stroke_width=3,  # Thicker stroke for cross effect
-        stroke_color="#FF0000",
+        fill_color="rgba(255, 255, 255, 0.0)",  
+        stroke_width=2,  
+        stroke_color=point_color,  
         background_color="#eee",
         background_image=image,
         update_streamlit=True,
         height=image.height,
         width=image.width,
         drawing_mode="point",
-        point_display_radius=4,  # Smaller radius for cross-like appearance
+        point_display_radius=3,  
         key=key
     )
 
@@ -101,13 +143,13 @@ def get_click_coordinates_simple(image, instructions, key, max_points=None):
         remaining = max_points - current_count
         
         if current_count >= max_points:
-            st.success(f"✅ {max_points} points selected!")
+            st.success(f"✅ {max_points} points selected with {color_name.split()[1]} markers!")
             if completion_key in st.session_state:
                 st.session_state[completion_key] = True
         else:
-            st.write(f"📍 Points selected: {current_count}/{max_points} ({remaining} more needed)")
+            st.write(f"📍 {color_name.split()[1]} points selected: {current_count}/{max_points} ({remaining} more needed)")
     else:
-        st.write(f"📍 Points selected: {len(points)}")
+        st.write(f"📍 {color_name.split()[1]} points selected: {len(points)}")
     
     # Add control buttons
     col1, col2 = st.columns(2)
