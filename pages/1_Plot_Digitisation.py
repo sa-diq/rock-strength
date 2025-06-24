@@ -4,12 +4,14 @@ import streamlit as st
 from PIL import Image
 import pandas as pd
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 # Add the project root to the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.calibrate_axes_streamlit import calibrate_axes_streamlit
 from core.extract_points_streamlit import extract_points_streamlit
+from core.recreate_plot import create_validation_overlay, calculate_validation_metrics, display_validation_summary
 from core.database import db_manager
 from navigation import create_navigation
 
@@ -87,7 +89,7 @@ def go_back():
         st.session_state.sandstone_index = 0
         st.session_state.data_points = []
         st.session_state.sandstone_names = []
-    elif st.session_state.step == 4:
+    elif st.session_state.step == 4:  # Back from validation
         st.session_state.step = 3
         if st.session_state.sandstone_index > 0:
             st.session_state.sandstone_index -= 1
@@ -98,6 +100,8 @@ def go_back():
                     if point.get('dataset') != last_name
                 ]
                 st.session_state.sandstone_names.pop()
+    elif st.session_state.step == 5:  # Back from save
+        st.session_state.step = 4
 
 def go_back_one_sandstone():
     """Handle going back one sandstone in step 3"""
@@ -124,7 +128,8 @@ progress_text = {
     1: "Step 1: Upload & Configure",
     2: "Step 2: Calibrate Axes", 
     3: "Step 3: Extract Data Points",
-    4: "Step 4: Save Results"
+    4: "Step 4: Validate Extraction",
+    5: "Step 5: Save Results"
 }
 
 st.info(f"**{progress_text.get(step, 'Unknown Step')}**")
@@ -300,14 +305,99 @@ if uploaded_file:
                     st.session_state.sandstone_index += 1
                     
                     if st.session_state.sandstone_index >= total_sandstones:
-                        st.session_state.step = 4
+                        st.session_state.step = 4  # Go to validation step
                     
                     st.rerun()
             else:
                 st.button("✅ Confirm Points", disabled=True)
 
-    # Step 4: Results and save
+    # Step 4: Validation
     elif st.session_state.step == 4:
+        st.markdown("### 🔍 Validate Extracted Data")
+        
+        if st.session_state.data_points:
+            # Create and display validation overlay
+            try:
+                validation_fig = create_validation_overlay(
+                    img_pil, 
+                    st.session_state.data_points,
+                    st.session_state.sandstone_names
+                )
+                st.pyplot(validation_fig)
+                plt.close(validation_fig)  # Prevent memory leaks
+                
+            except Exception as e:
+                st.error(f"❌ Error creating validation overlay: {e}")
+                st.write("**Extracted Points Data:**")
+                st.write(st.session_state.data_points[:5])  # Show first 5 for debugging
+            
+            # Calculate and display validation metrics
+            try:
+                metrics = calculate_validation_metrics(
+                    st.session_state.data_points,
+                    st.session_state.sandstone_names
+                )
+                display_validation_summary(metrics)
+                
+            except Exception as e:
+                st.error(f"❌ Error calculating validation metrics: {e}")
+            
+            # Optional debug mode
+            # with st.expander("🔧 Debug: Canvas Alignment Issues"):
+            #     st.write("**Use this if extracted points seem offset from actual data points**")
+                
+            #     if st.button("Show Canvas Alignment Debug"):
+            #         test_points = [(point['x_pixel'], point['y_pixel']) for point in st.session_state.data_points]
+            #         debug_canvas_alignment(img_pil, test_points)
+                
+                st.markdown("""
+                **What to look for:**
+                - Red + markers should be exactly on the data symbols
+                - If they're consistently offset (left/right/up/down), that's the canvas alignment issue
+                - This helps identify systematic coordinate misalignment
+                """)
+            
+            # MOVE THIS OUTSIDE THE EXPANDER:
+            # Validation question
+            st.markdown("---")
+            st.markdown("#### 🔍 Visual Validation")
+            st.write("**Do the extracted points (shown as + markers) align accurately with the data points in the original plot?**")
+            
+            # Validation controls
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("⬅️ Back to Point Extraction"):
+                    go_back()
+                    st.rerun()
+            
+            with col2:
+                if st.button("❌ No - Re-extract Points", help="Points don't look accurate"):
+                    # Go back to last sandstone for re-extraction
+                    if st.session_state.sandstone_index > 0:
+                        st.session_state.sandstone_index -= 1
+                        if st.session_state.sandstone_names:
+                            last_name = st.session_state.sandstone_names[-1]
+                            st.session_state.data_points = [
+                                point for point in st.session_state.data_points 
+                                if point.get('dataset') != last_name
+                            ]
+                            st.session_state.sandstone_names.pop()
+                    st.session_state.step = 3
+                    st.rerun()
+            
+            with col3:
+                if st.button("✅ Yes - Points Look Good", type="primary", help="Proceed to save"):
+                    st.session_state.step = 5  # Go to save step
+                    st.rerun()
+        
+        else:
+            st.error("❌ No data points found for validation!")
+            if st.button("⬅️ Back to Point Extraction"):
+                go_back()
+                st.rerun()
+    # Step 5: Results and save
+    elif st.session_state.step == 5:
         st.markdown("### 🎉 Digitization Complete!")
         
         if st.session_state.data_points:
@@ -386,7 +476,7 @@ if uploaded_file:
             
             # Back button
             st.markdown("---")
-            if st.button("⬅️ Back to Point Extraction"):
+            if st.button("⬅️ Back to Validation"):
                 go_back()
                 st.rerun()
         
