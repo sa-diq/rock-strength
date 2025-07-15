@@ -5,10 +5,10 @@
 # ============================================================================
 
 # Database files
-data/
-*.db
-*.sqlite
-*.sqlite3
+# data/
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # Uploaded plot images
 uploads/
