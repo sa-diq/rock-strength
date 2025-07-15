@@ -55,32 +55,6 @@ def display_plot_card(plot):
                 if st.button("👁️ View Data", key=f"view_{plot['id']}"):
                     st.session_state[show_data_key] = True
                     st.rerun()
-            
-            # Delete button with confirmation
-            delete_confirm_key = f"delete_confirm_{plot['id']}"
-            
-            if st.session_state.get(delete_confirm_key, False):
-                st.warning("⚠️ Confirm deletion:")
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button("❌ Delete", key=f"confirm_delete_{plot['id']}", type="secondary"):
-                        try:
-                            db_manager.delete_plot(plot['id'])
-                            st.success("✅ Deleted!")
-                            st.session_state[delete_confirm_key] = False
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-                            st.session_state[delete_confirm_key] = False
-                
-                with col_b:
-                    if st.button("↩️ Cancel", key=f"cancel_delete_{plot['id']}"):
-                        st.session_state[delete_confirm_key] = False
-                        st.rerun()
-            else:
-                if st.button("🗑️ Delete", key=f"delete_{plot['id']}", help="Delete this plot"):
-                    st.session_state[delete_confirm_key] = True
-                    st.rerun()
         
         # Show data if requested
         if st.session_state.get(show_data_key, False):
@@ -196,14 +170,14 @@ try:
         else:
             st.warning(f"🔍 No plots found matching '{search_term}'")
         
-        # Bulk actions
+        # Bulk data download
         if len(plots) > 1:
             st.markdown("---")
-            st.markdown("### 🔧 Bulk Actions")
+            st.markdown("###  Bulk Data Download")
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📥 Export All Data"):
+                if st.button("Export All Data as CSV", help="Download all plot data as a single CSV file"):
                     try:
                         all_data = []
                         for plot in plots:
@@ -221,17 +195,13 @@ try:
                             st.download_button(
                                 "📥 Download All Data as CSV",
                                 csv_all,
-                                file_name="all_plots_data.csv",
+                                file_name="all_digitised_plots_data.csv",
                                 mime="text/csv"
                             )
                         else:
                             st.warning("No data to export")
                     except Exception as e:
                         st.error(f"Error exporting data: {e}")
-            
-            with col2:
-                # Placeholder for future bulk operations
-                st.info("More bulk actions coming soon...")
 
 except Exception as e:
     st.error(f"❌ **Database Error:** {e}")
