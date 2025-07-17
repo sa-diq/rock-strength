@@ -13,15 +13,12 @@ def extract_points_streamlit(image_pil, sandstone_name, pixel_to_data):
     
     data_points = []
     for x, y in points:
-        # SIMPLE OFFSET CORRECTION - adjust these values based on your testing
-        x_corrected = x + 5  # Start with +5 pixels to the right
-        y_corrected = y + 0  # No Y correction for now
-        
-        x_data, y_data = pixel_to_data(x_corrected, y_corrected)
+        # No offset correction - using raw coordinates
+        x_data, y_data = pixel_to_data(x, y)
         data_points.append({
             "dataset": sandstone_name,
-            "x_pixel": x_corrected,  # Store original click position
-            "y_pixel": y_corrected,
+            "x_pixel": x,  # Store raw click position
+            "y_pixel": y,
             "P(MPa)": x_data,
             "Q(MPa)": y_data
         })

@@ -1,6 +1,8 @@
 import streamlit as st
 import numpy as np
 from streamlit_image_coordinates import streamlit_image_coordinates
+from PIL import Image, ImageDraw
+import io
 
 def get_point_color_selector(key_prefix):
     """
@@ -36,9 +38,50 @@ def get_point_color_selector(key_prefix):
     
     return selected_color_hex, selected_color_name
 
+def create_image_with_points(original_image, points, color_hex, marker_size=8):
+    """
+    Create a copy of the image with points drawn on it
+    
+    Args:
+        original_image: PIL Image object
+        points: List of (x, y) tuples
+        color_hex: Color for the points
+        marker_size: Size of the point markers
+        
+    Returns:
+        PIL Image with points drawn on it
+    """
+    # Create a copy of the original image and convert to RGBA for transparency
+    img_copy = original_image.copy()
+    if img_copy.mode != 'RGBA':
+        img_copy = img_copy.convert('RGBA')
+    
+    # Create a transparent overlay for the markers
+    overlay = Image.new('RGBA', img_copy.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    # Convert hex color to RGBA with transparency
+    color_rgb = tuple(int(color_hex[i:i+2], 16) for i in (1, 3, 5))
+    color_rgba = color_rgb + (180,)  # Alpha value of 180 (out of 255) for transparency
+    
+    # Draw each point as a thin cross
+    for x, y in points:
+        # Draw cross with thinner lines
+        draw.line([x-marker_size, y, x+marker_size, y], fill=color_rgba, width=2)
+        draw.line([x, y-marker_size, x, y+marker_size], fill=color_rgba, width=2)
+    
+    # Composite the overlay onto the original image
+    result = Image.alpha_composite(img_copy, overlay)
+    
+    # Convert back to RGB if needed
+    if original_image.mode == 'RGB':
+        result = result.convert('RGB')
+    
+    return result
+
 def get_click_coordinates(image, instructions, key):
     """
-    Get click coordinates using streamlit-image-coordinates
+    Get click coordinates using streamlit-image-coordinates with visual feedback
     
     Args:
         image: PIL Image object
@@ -61,9 +104,12 @@ def get_click_coordinates(image, instructions, key):
     if points_key not in st.session_state:
         st.session_state[points_key] = []
     
+    # Create image with existing points drawn on it
+    display_image = create_image_with_points(image, st.session_state[points_key], point_color)
+    
     # Display image with coordinate capture
     value = streamlit_image_coordinates(
-        image,
+        display_image,
         key=f"{key}_image_coords",
         height=image.height,
         width=image.width
@@ -77,7 +123,7 @@ def get_click_coordinates(image, instructions, key):
         # (avoid duplicate clicks)
         is_new_point = True
         for existing_point in st.session_state[points_key]:
-            if abs(existing_point[0] - new_point[0]) < 5 and abs(existing_point[1] - new_point[1]) < 5:
+            if abs(existing_point[0] - new_point[0]) < 10 and abs(existing_point[1] - new_point[1]) < 10:
                 is_new_point = False
                 break
         
@@ -85,7 +131,7 @@ def get_click_coordinates(image, instructions, key):
             st.session_state[points_key].append(new_point)
             st.rerun()
     
-    # Show current points with visual overlay
+    # Show current points status
     if st.session_state[points_key]:
         st.success(f"✅ {len(st.session_state[points_key])} points selected with {color_name.split()[1]} markers!")
         
@@ -109,7 +155,7 @@ def get_click_coordinates(image, instructions, key):
 
 def get_click_coordinates_simple(image, instructions, key, max_points=None):
     """
-    Simplified version for calibration with streamlit-image-coordinates
+    Simplified version for calibration with streamlit-image-coordinates and visual feedback
     
     Args:
         image: PIL Image object
@@ -130,9 +176,12 @@ def get_click_coordinates_simple(image, instructions, key, max_points=None):
     if points_key not in st.session_state:
         st.session_state[points_key] = []
     
+    # Create image with existing points drawn on it
+    display_image = create_image_with_points(image, st.session_state[points_key], point_color)
+    
     # Display image with coordinate capture
     value = streamlit_image_coordinates(
-        image,
+        display_image,
         key=f"{key}_image_coords",
         height=image.height,
         width=image.width
@@ -147,7 +196,7 @@ def get_click_coordinates_simple(image, instructions, key, max_points=None):
             # Check if this point is significantly different from existing points
             is_new_point = True
             for existing_point in st.session_state[points_key]:
-                if abs(existing_point[0] - new_point[0]) < 5 and abs(existing_point[1] - new_point[1]) < 5:
+                if abs(existing_point[0] - new_point[0]) < 10 and abs(existing_point[1] - new_point[1]) < 10:
                     is_new_point = False
                     break
             
