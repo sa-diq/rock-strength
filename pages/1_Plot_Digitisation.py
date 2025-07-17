@@ -210,7 +210,7 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
     try:
         img_pil = Image.open(uploaded_file)
-        st.image(img_pil, caption="Uploaded Plot", use_container_width=True)
+        st.image(img_pil, caption="Uploaded Plot", use_column_width=True)
     except Exception as e:
         st.error(f"Error loading image: {e}")
         st.stop()
