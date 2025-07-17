@@ -25,7 +25,7 @@ def create_navigation():
         st.page_link("pages/2_Data_Management.py", label="Data Management", icon="📋")
     
     with col4:
-        st.page_link("pages/3_Analytics.py", label="Analytics", icon="💾")
+        st.page_link("pages/3_DB_Query.py", label="Database Query", icon="🔍")
     
     st.markdown("---")
 
