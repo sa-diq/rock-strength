@@ -31,6 +31,7 @@ def init_session_state():
         # Per-sandstone workflow state
         "current_sandstone_index": 0,
         "sandstone_validation_status": "extract",  # "extract" | "validate" | "confirmed"
+        "extract_sub_phase": "name_entry",  # "name_entry" | "point_extraction"
         "validated_sandstones": [],  # List of completed sandstone data
         "current_sandstone_name": "",
         "current_sandstone_points": [],
@@ -62,9 +63,9 @@ def reset_digitization():
     """Reset all digitization session state"""
     keys_to_reset = [
         "step", "current_sandstone_index", "sandstone_validation_status", 
-        "validated_sandstones", "current_sandstone_name", "current_sandstone_points",
-        "pixel_to_data", "doi", "figure_number", "plot_identifier", 
-        "total_sandstones", "uploaded_file"
+        "extract_sub_phase", "validated_sandstones", "current_sandstone_name", 
+        "current_sandstone_points", "pixel_to_data", "doi", "figure_number", 
+        "plot_identifier", "total_sandstones", "uploaded_file"
     ]
     for key in keys_to_reset:
         if key in st.session_state:
@@ -100,22 +101,27 @@ def go_back():
     elif st.session_state.step == 3:
         # Handle per-sandstone back navigation
         if st.session_state.sandstone_validation_status == "validate":
-            # Back to extract for current sandstone
+            # Back to point extraction
             st.session_state.sandstone_validation_status = "extract"
+            st.session_state.extract_sub_phase = "point_extraction"
         elif st.session_state.sandstone_validation_status == "extract":
-            if st.session_state.current_sandstone_index > 0:
-                # Back to previous sandstone (confirmed state)
-                st.session_state.current_sandstone_index -= 1
-                st.session_state.sandstone_validation_status = "confirmed"
-                # Load previous sandstone data
-                prev_sandstone = st.session_state.validated_sandstones[-1]
-                st.session_state.current_sandstone_name = prev_sandstone['name']
-                st.session_state.current_sandstone_points = prev_sandstone['points']
-            else:
-                # Back to calibration
-                st.session_state.step = 2
+            if st.session_state.extract_sub_phase == "point_extraction":
+                # Back to name entry
+                st.session_state.extract_sub_phase = "name_entry"
+            elif st.session_state.extract_sub_phase == "name_entry":
+                if st.session_state.current_sandstone_index > 0:
+                    # Back to previous sandstone (confirmed state)
+                    st.session_state.current_sandstone_index -= 1
+                    st.session_state.sandstone_validation_status = "confirmed"
+                    st.session_state.extract_sub_phase = "name_entry"
+                    # Load previous sandstone data
+                    prev_sandstone = st.session_state.validated_sandstones[-1]
+                    st.session_state.current_sandstone_name = prev_sandstone['name']
+                    st.session_state.current_sandstone_points = prev_sandstone['points']
+                else:
+                    # Back to calibration
+                    st.session_state.step = 2
     elif st.session_state.step == 4:
-        # This shouldn't happen much since we auto-save
         st.session_state.step = 3
 
 def proceed_to_next_sandstone():
@@ -177,6 +183,7 @@ def proceed_to_next_sandstone():
         # NEXT SANDSTONE: Advance to next
         st.session_state.current_sandstone_index += 1
         st.session_state.sandstone_validation_status = "extract"
+        st.session_state.extract_sub_phase = "name_entry"  # Reset to name entry
         st.session_state.current_sandstone_name = ""
         st.session_state.current_sandstone_points = []
     
@@ -292,7 +299,7 @@ if uploaded_file:
                 st.session_state.step = 2
                 st.rerun()
 
-    # Step 2: Calibrate Axes (unchanged from original)
+    # Step 2: Calibrate Axes
     elif st.session_state.step == 2:
         st.markdown("### 📏 Axis Calibration")
         
@@ -312,7 +319,7 @@ if uploaded_file:
                     st.session_state.step = 3
                     st.rerun()
 
-    # Step 3: Per-Sandstone Extraction and Validation (COMPLETELY NEW)
+    # Step 3: Per-Sandstone Extraction and Validation
     elif st.session_state.step == 3:
         st.markdown("### 📍 Per-Sandstone Data Extraction")
         
@@ -328,62 +335,80 @@ if uploaded_file:
         status = st.session_state.sandstone_validation_status
         
         if status == "extract":
-            # EXTRACT PHASE: Get sandstone name and extract points
-            st.markdown(f"#### 🪨 Sandstone {current_sandstone_num} - Point Extraction")
-            
-            # Get sandstone name
-            sandstone_name = st.text_input(
-                f"Name for Sandstone {current_sandstone_num}:", 
-                value=st.session_state.current_sandstone_name,
-                placeholder="e.g., Berea_Sandstone",
-                key=f"sandstone_name_{current_sandstone_num}"
-            )
-            
-            if sandstone_name != st.session_state.current_sandstone_name:
-                st.session_state.current_sandstone_name = sandstone_name
-                st.session_state.current_sandstone_points = []  # Reset points when name changes
-            
-            points = None
-            extract_button_enabled = True
-            
-            if sandstone_name:
-                # Check for duplicate names
-                existing_names = [s['name'] for s in st.session_state.validated_sandstones]
-                if sandstone_name in existing_names:
-                    st.error("❌ Sandstone name already used. Please choose a different name.")
-                else:
-                    # Extract points
-                    # Call extract_points_streamlit and let it manage its own state
-                    points = extract_points_streamlit(
-                        img_pil, 
-                        sandstone_name, 
-                        st.session_state.pixel_to_data
-                    )
-
-                    # Update the workflow state
-                    st.session_state.current_sandstone_points = points
-            
-            # Navigation buttons
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if st.button("⬅️ Back"):
-                    go_back()
-                    st.rerun()
-            
-            with col2:
-                if st.session_state.current_sandstone_index > 0:
-                    if st.button("↩️ Previous Sandstone"):
+            if st.session_state.extract_sub_phase == "name_entry":
+                # SUB-PHASE 1: NAME ENTRY ONLY
+                st.markdown(f"#### 🪨 Sandstone {current_sandstone_num} - Enter Name")
+                
+                # Get sandstone name
+                sandstone_name = st.text_input(
+                    f"Name for Sandstone {current_sandstone_num}:", 
+                    value=st.session_state.current_sandstone_name,
+                    placeholder="e.g., Berea_Sandstone",
+                    key=f"sandstone_name_{current_sandstone_num}"
+                )
+                
+                # Show instruction text
+                st.markdown("**Press Enter When Done**")
+                
+                # Check for name change and validation
+                if sandstone_name and sandstone_name != st.session_state.current_sandstone_name:
+                    # Check for duplicate names
+                    existing_names = [s['name'] for s in st.session_state.validated_sandstones]
+                    if sandstone_name in existing_names:
+                        st.error("❌ Sandstone name already used. Please choose a different name.")
+                    else:
+                        # Valid name - update state and proceed to point extraction
+                        st.session_state.current_sandstone_name = sandstone_name
+                        st.session_state.current_sandstone_points = []  # Reset points
+                        st.session_state.extract_sub_phase = "point_extraction"
+                        st.rerun()
+                
+                # Navigation buttons - only back
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    if st.button("⬅️ Back"):
                         go_back()
                         st.rerun()
+                
+                with col2:
+                    if st.session_state.current_sandstone_index > 0:
+                        if st.button("↩️ Previous Sandstone"):
+                            go_back()
+                            st.rerun()
             
-            with col3:
-                if extract_button_enabled:
+            elif st.session_state.extract_sub_phase == "point_extraction":
+                # SUB-PHASE 2: POINT EXTRACTION
+                st.markdown(f"#### 📍 Sandstone {current_sandstone_num} - Extract Points")
+                st.markdown(f"**Current sandstone:** {st.session_state.current_sandstone_name}")
+                
+                # Extract points
+                points = extract_points_streamlit(
+                    img_pil, 
+                    st.session_state.current_sandstone_name, 
+                    st.session_state.pixel_to_data
+                )
+                
+                # Update the workflow state
+                st.session_state.current_sandstone_points = points
+                
+                # Navigation buttons
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("⬅️ Back to Name"):
+                        go_back()
+                        st.rerun()
+                
+                with col2:
+                    if st.session_state.current_sandstone_index > 0:
+                        if st.button("↩️ Previous Sandstone"):
+                            go_back()
+                            st.rerun()
+                
+                with col3:
                     if st.button("➡️ Validate Points", type="primary"):
                         st.session_state.sandstone_validation_status = "validate"
                         st.rerun()
-                else:
-                    st.button("➡️ Validate Points", disabled=True)
         
         elif status == "validate":
             # VALIDATE PHASE: Show validation overlay and get user confirmation
@@ -414,11 +439,13 @@ if uploaded_file:
                 with col1:
                     if st.button("⬅️ Back to Extract"):
                         st.session_state.sandstone_validation_status = "extract"
+                        st.session_state.extract_sub_phase = "point_extraction"
                         st.rerun()
                 
                 with col2:
                     if st.button("❌ Re-extract Points", help="Points don't look accurate"):
                         st.session_state.sandstone_validation_status = "extract"
+                        st.session_state.extract_sub_phase = "point_extraction"
                         st.session_state.current_sandstone_points = []
                         st.rerun()
                 
@@ -432,8 +459,9 @@ if uploaded_file:
                 st.error("❌ No points to validate!")
                 if st.button("⬅️ Back to Extract"):
                     st.session_state.sandstone_validation_status = "extract"
+                    st.session_state.extract_sub_phase = "point_extraction"
                     st.rerun()
-
+        
     # Step 4: Completion Page (NEW)
     elif st.session_state.step == 4:
         st.markdown("### 🎉 Digitization Complete!")
