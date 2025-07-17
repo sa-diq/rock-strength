@@ -95,14 +95,7 @@ def calibrate_axes_streamlit(image_pil):
                                 return 0, 0
                         
                         st.success("✅ Axes calibration complete!")
-                        st.write("**Calibration Summary:**")
-                        st.write(f"- X-axis: {x1_data} to {x2_data} (pixel range: {x1_pixel:.1f} to {x2_pixel:.1f})")
-                        st.write(f"- Y-axis: {y1_data} to {y2_data} (pixel range: {y3_pixel:.1f} to {y4_pixel:.1f})")
                         
-                        # Show calibration quality
-                        st.write("**Calibration Quality:**")
-                        st.write(f"- X-axis pixel span: {abs(x_pixel_diff):.1f} pixels")
-                        st.write(f"- Y-axis pixel span: {abs(y_pixel_diff):.1f} pixels")
                         
                         return pixel_to_data
                 else:

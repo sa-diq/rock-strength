@@ -82,35 +82,29 @@ def create_image_with_points(original_image, points, color_hex, marker_size=8):
 def get_click_coordinates(image, instructions, key):
     """
     Get click coordinates using streamlit-image-coordinates with visual feedback
-    
-    Args:
-        image: PIL Image object
-        instructions: Instructions to show user
-        key: Unique key for the component
-        
-    Returns:
-        list: List of (x, y) coordinate tuples
     """
     st.write(instructions)
     
     # Color selector
     point_color, color_name = get_point_color_selector(key)
+    st.info(f"💡 **Tip**: Using {color_name.split()[1]} points. Change colour if they're hard to see on your plot.")
     
-    # Show color tip
-    st.info(f"💡 **Tip**: Using {color_name.split()[1]} points. Change color if they're hard to see on your plot.")
-    
-    # Initialize session state for storing points
+    # Initialize session state
     points_key = f"{key}_points"
+    reset_key = f"{key}_reset_counter"
+    
     if points_key not in st.session_state:
         st.session_state[points_key] = []
+    if reset_key not in st.session_state:
+        st.session_state[reset_key] = 0
     
-    # Create image with existing points drawn on it
+    # Create image with points drawn on it
     display_image = create_image_with_points(image, st.session_state[points_key], point_color)
     
     # Display image with coordinate capture
     value = streamlit_image_coordinates(
         display_image,
-        key=f"{key}_image_coords",
+        key=f"{key}_image_coords_{st.session_state[reset_key]}",
         height=image.height,
         width=image.width
     )
@@ -120,7 +114,6 @@ def get_click_coordinates(image, instructions, key):
         new_point = (value["x"], value["y"])
         
         # Check if this point is significantly different from existing points
-        # (avoid duplicate clicks)
         is_new_point = True
         for existing_point in st.session_state[points_key]:
             if abs(existing_point[0] - new_point[0]) < 10 and abs(existing_point[1] - new_point[1]) < 10:
@@ -131,27 +124,33 @@ def get_click_coordinates(image, instructions, key):
             st.session_state[points_key].append(new_point)
             st.rerun()
     
-    # Show current points status
-    if st.session_state[points_key]:
-        st.success(f"✅ {len(st.session_state[points_key])} points selected with {color_name.split()[1]} markers!")
-        
-        # Display current points
-        for i, (x, y) in enumerate(st.session_state[points_key]):
-            st.write(f"Point {i+1}: ({x:.1f}, {y:.1f})")
+    # Show current points
+    current_points = st.session_state[points_key]
+    if current_points:
+        st.success(f"✅ {len(current_points)} points selected with {color_name.split()[1]} markers!")
+    else:
+        st.write(f"📍 No {color_name.split()[1]} points selected yet")
     
     # Control buttons
-    col1, col2 = st.columns(2)
+    col1, col2= st.columns(2)
+    
     with col1:
-        if st.button("🗑️ Clear Points", key=f"{key}_clear"):
+        if st.button("🗑️ Clear All", key=f"{key}_clear"):
             st.session_state[points_key] = []
+            st.session_state[reset_key] += 1
             st.rerun()
     
     with col2:
-        if st.session_state[points_key]:
-            if st.button("✅ Confirm Points", key=f"{key}_confirm"):
-                st.success("Points confirmed!")
+        if current_points:
+            if st.button("↩️ Undo Last", key=f"{key}_undo"):
+                if len(st.session_state[points_key]) > 0:
+                    st.session_state[points_key].pop()
+                st.session_state[reset_key] += 1
+                st.rerun()
+        else:
+            st.button("↩️ Undo Last", key=f"{key}_undo_disabled", disabled=True)
     
-    return st.session_state[points_key]
+    return current_points
 
 def get_click_coordinates_simple(image, instructions, key, max_points=None):
     """
@@ -173,16 +172,20 @@ def get_click_coordinates_simple(image, instructions, key, max_points=None):
     
     # Initialize session state for storing points
     points_key = f"{key}_points"
+    reset_key = f"{key}_reset_counter"
+    
     if points_key not in st.session_state:
         st.session_state[points_key] = []
+    if reset_key not in st.session_state:
+        st.session_state[reset_key] = 0
     
     # Create image with existing points drawn on it
     display_image = create_image_with_points(image, st.session_state[points_key], point_color)
     
-    # Display image with coordinate capture
+    # Display image with coordinate capture - use reset counter to force component refresh
     value = streamlit_image_coordinates(
         display_image,
-        key=f"{key}_image_coords",
+        key=f"{key}_image_coords_{st.session_state[reset_key]}",
         height=image.height,
         width=image.width
     )
@@ -219,19 +222,32 @@ def get_click_coordinates_simple(image, instructions, key, max_points=None):
         st.write(f"📍 {color_name.split()[1]} points selected: {len(points)}")
     
     # Display current points
-    for i, (x, y) in enumerate(points):
-        st.write(f"Point {i+1}: ({x:.1f}, {y:.1f})")
+    # for i, (x, y) in enumerate(points):
+    #     st.write(f"Point {i+1}: ({x:.1f}, {y:.1f})")
     
     # Control buttons
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🗑️ Clear Points", key=f"{key}_clear"):
+        if st.button("🗑️ Clear All", key=f"{key}_clear"):
             st.session_state[points_key] = []
+            st.session_state[reset_key] += 1  # Force component reset
             st.rerun()
     
     with col2:
-        if points and st.button("✅ Confirm Points", key=f"{key}_confirm"):
-            if not max_points or len(points) >= max_points:
-                st.success("Points confirmed!")
+        if points:
+            if st.button("↩️ Undo Last", key=f"{key}_undo"):
+                st.session_state[points_key].pop()  # Remove last point
+                st.session_state[reset_key] += 1  # Force component reset
+                st.rerun()
+        else:
+            st.button("↩️ Undo Last", key=f"{key}_undo_disabled", disabled=True)
+    
+    # with col3:
+    #     if points:
+    #         if st.button("✅ Confirm Points", key=f"{key}_confirm"):
+    #             if not max_points or len(points) >= max_points:
+    #                 st.success("Points confirmed!")
+    #     else:
+    #         st.button("✅ Confirm Points", key=f"{key}_confirm_disabled", disabled=True)
     
     return points

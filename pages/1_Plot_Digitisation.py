@@ -344,7 +344,7 @@ if uploaded_file:
                 st.session_state.current_sandstone_points = []  # Reset points when name changes
             
             points = None
-            extract_button_enabled = False
+            extract_button_enabled = True
             
             if sandstone_name:
                 # Check for duplicate names
@@ -353,16 +353,15 @@ if uploaded_file:
                     st.error("❌ Sandstone name already used. Please choose a different name.")
                 else:
                     # Extract points
+                    # Call extract_points_streamlit and let it manage its own state
                     points = extract_points_streamlit(
                         img_pil, 
                         sandstone_name, 
                         st.session_state.pixel_to_data
                     )
-                    
-                    if points:
-                        st.session_state.current_sandstone_points = points
-                        st.success(f"✅ {len(points)} points extracted for {sandstone_name}")
-                        extract_button_enabled = True
+
+                    # Update the workflow state
+                    st.session_state.current_sandstone_points = points
             
             # Navigation buttons
             col1, col2, col3 = st.columns(3)
