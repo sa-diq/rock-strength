@@ -155,13 +155,10 @@ with tab_sql:
 # =============================================================================
 
 with tab_nl:
-    st.markdown("### 🤖 Natural Language Query Interface")
-    
-    # Security notice
-    st.info("🔒 **Security**: This interface only allows read-only queries (SELECT statements)")
+    st.markdown("### Natural Language Query Interface")
     
     # Step 1: Question Input
-    st.markdown("#### 💬 Ask a Question")
+    st.markdown("#### Ask a question about the data in the database")
     
     # Handle example question selection
     if 'example_question' in st.session_state:
@@ -169,10 +166,10 @@ with tab_nl:
         del st.session_state.example_question  # Clear after use
     
     question = st.text_input(
-        "Ask a question about your research data:",
+        "Enter your question below:",
         value=st.session_state.nl_question,
         placeholder="How many plots were digitized this year?",
-        help="Examples: 'How many plots?', 'List all sandstone names', 'What's the average pressure?'",
+        help="Examples: 'How many plots?', 'List all sandstone names'",
         key="nl_question_input"
     )
     
@@ -186,10 +183,10 @@ with tab_nl:
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        generate_button = st.button("🤖 Generate SQL", type="primary", disabled=not question.strip())
+        generate_button = st.button("Generate SQL", type="primary", disabled=not question.strip())
     
     with col2:
-        if st.button("🗑️ Clear"):
+        if st.button("Clear"):
             st.session_state.nl_question = ""
             st.session_state.nl_generated_sql = ""
             st.rerun()
@@ -204,7 +201,7 @@ with tab_nl:
             
             # Check if auto-fix was applied
             if "-- AUTO-FIXED VERSION:" in generated_sql:
-                st.info("🔧 **Auto-Fix Applied**: Detected and corrected SQL issues")
+                st.info(" **Auto-Fix Applied**: Detected and corrected SQL issues")
                 
             st.success("✅ SQL generated successfully!")
         else:
@@ -213,14 +210,14 @@ with tab_nl:
     
     # Step 4: Show Generated SQL (if exists)
     if st.session_state.nl_generated_sql:
-        st.markdown("#### ⚡ Generated SQL Query")
+        st.markdown("#### Generated SQL Query")
         st.code(st.session_state.nl_generated_sql, language="sql")
         
         # Validate the generated SQL
         issues, suggestions = validate_and_suggest_sql_fixes(st.session_state.nl_generated_sql)
         
         if issues:
-            st.warning("⚠️ **Potential SQL Issues Detected:**")
+            st.warning(" **Potential SQL Issues Detected:**")
             for i, issue in enumerate(issues):
                 st.write(f"• {issue}")
                 if i < len(suggestions):
@@ -232,13 +229,13 @@ with tab_nl:
         col1, col2 = st.columns([1, 3])
         
         with col1:
-            execute_button = st.button("▶️ Execute Query", type="secondary")
+            execute_button = st.button("Execute Query", type="secondary")
         
         with col2:
             if issues:
                 st.caption("⚠️ Review warnings above before executing")
-            else:
-                st.caption("✅ SQL looks good - ready to execute")
+            # else:
+            #     st.caption("✅ SQL looks good - ready to execute")
         
         # Step 6: Execute and show results
         if execute_button:
@@ -263,12 +260,12 @@ with tab_nl:
                             mime="text/csv"
                         )
                 else:
-                    st.info("📭 Query executed successfully but returned no results.")
+                    st.info("Query executed successfully but returned no results.")
             
             else:
                 # Handle errors
                 if result.get('security_violation'):
-                    st.error(f"🔒 **Security Alert**: {result['error']}")
+                    st.error(f"**Security Alert**: {result['error']}")
                     st.markdown("""
                     **Why was this blocked?**
                     - Only SELECT queries are allowed

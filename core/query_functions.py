@@ -319,7 +319,7 @@ SQL:"""
     }
     
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
         
         if response.status_code == 200:
             result = response.json()
@@ -397,8 +397,5 @@ def get_example_nl_questions():
     return [
         "How many plots are in the database?",
         "List all sandstone types",
-        "What's the average pressure across all data points?", 
-        "Show me plots created in the last month",
-        "Which sandstone has the most data points?",
         "What are the pressure and stress ranges?"
     ]
