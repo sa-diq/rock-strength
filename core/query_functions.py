@@ -274,38 +274,54 @@ def clean_user_question(question):
     # Add more cleanup rules as needed
     return question.strip()
 
+# Replace your generate_sql_from_nl function in core/query_functions.py with this:
+
+import time
+
 def generate_sql_from_nl(question):
-    """Generate SQL from natural language using Featherless AI"""
+    """Generate SQL from natural language with rate limiting"""
     
     if not question or not question.strip():
         return None
     
+    # Simple rate limiting - wait 3 seconds between requests
+    if 'last_nl_request' not in st.session_state:
+        st.session_state.last_nl_request = 0
+    
+    time_since_last = time.time() - st.session_state.last_nl_request
+    if time_since_last < 3:
+        wait_time = 3 - time_since_last
+        st.warning(f"⏱️ **Rate limit protection**: Please wait {wait_time:.1f} seconds")
+        time.sleep(wait_time)
+    
+    st.session_state.last_nl_request = time.time()
+    
     # Clean the question
     cleaned_question = clean_user_question(question)
     
-    # Check if HF_TOKEN is available
-    if 'HF_TOKEN' not in os.environ:
-        st.error("❌ API token not found. Please set HF_TOKEN in your environment.")
+    # Check for HF_TOKEN
+    hf_token = os.environ.get('HF_TOKEN') or st.secrets.get('HF_TOKEN')
+    
+    if not hf_token:
+        st.error("""
+        ❌ **API Token Required**
+        Add HF_TOKEN to your app secrets or use the SQL Query tab.
+        """)
         return None
     
     API_URL = "https://router.huggingface.co/featherless-ai/v1/completions"
     
     headers = {
-        "Authorization": f"Bearer {os.environ['HF_TOKEN']}",
+        "Authorization": f"Bearer {hf_token}",
         "Content-Type": "application/json"
     }
     
-    # Simplified but clearer prompt
     schema_context = f"""Generate ONLY a SQL SELECT query for this database:
 
 Tables:
 - plots: id, doi, figure_number, created_at
 - sandstones: id, plot_id, sandstone_name  
 - data_points: id, sandstone_id, p_mpa, q_mpa
-
-Relationships:
-- plots.id -> sandstones.plot_id
-- sandstones.id -> data_points.sandstone_id
 
 Question: {cleaned_question}
 SQL:"""
@@ -319,33 +335,39 @@ SQL:"""
     }
     
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+        with st.spinner("🤖 Generating SQL (rate limited for stability)..."):
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
         
         if response.status_code == 200:
             result = response.json()
             generated_sql = result['choices'][0]['text'].strip()
-            
-            # Clean up the generated SQL
             generated_sql = generated_sql.replace('```sql', '').replace('```', '').strip()
             
-            # Test and potentially fix the SQL
+            # Test and fix SQL
             final_sql, was_fixed, fix_message = test_and_fix_sql(generated_sql)
             
-            # Store both original and fixed for user display
             if was_fixed:
-                return f"-- ORIGINAL (BROKEN):\n-- {generated_sql.replace(chr(10), chr(10) + '-- ')}\n\n-- AUTO-FIXED VERSION:\n{final_sql}"
+                return f"-- AUTO-FIXED VERSION:\n{final_sql}"
             else:
                 return final_sql
                 
-        else:
-            st.error(f"❌ API Error: {response.status_code} - {response.text}")
+        elif response.status_code == 429:
+            st.error("""
+            ⏰ **Still hitting rate limits!**
+            
+            **Options:**
+            1. Wait 5 minutes and try again
+            2. Use **SQL Query tab** (unlimited)
+            3. Get Featherless API key ($10/month for unlimited)
+            """)
             return None
             
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Connection Error: {e}")
-        return None
+        else:
+            st.error(f"❌ API Error: {response.status_code}")
+            return None
+            
     except Exception as e:
-        st.error(f"❌ Unexpected Error: {e}")
+        st.error(f"❌ Connection Error: {e}")
         return None
 
 def execute_nl_generated_sql(sql_query):
