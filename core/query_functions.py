@@ -275,18 +275,39 @@ def clean_user_question(question):
     # Add more cleanup rules as needed
     return question.strip()
 
+# Replace your generate_sql_from_nl function in core/query_functions.py with this:
+
+import time
+
 def generate_sql_from_nl(question):
-    """Generate SQL from natural language using Featherless AI"""
+    """Generate SQL from natural language with rate limiting"""
     
     if not question or not question.strip():
         return None
     
+    # Simple rate limiting - wait 3 seconds between requests
+    if 'last_nl_request' not in st.session_state:
+        st.session_state.last_nl_request = 0
+    
+    time_since_last = time.time() - st.session_state.last_nl_request
+    if time_since_last < 3:
+        wait_time = 3 - time_since_last
+        st.warning(f"⏱️ **Rate limit protection**: Please wait {wait_time:.1f} seconds")
+        time.sleep(wait_time)
+    
+    st.session_state.last_nl_request = time.time()
+    
     # Clean the question
     cleaned_question = clean_user_question(question)
     
-    # Check if HF_TOKEN is available
-    if 'HF_TOKEN' not in os.environ:
-        st.error("❌ API token not found. Please set HF_TOKEN in your environment.")
+    # Check for HF_TOKEN
+    hf_token = os.environ.get('HF_TOKEN') or st.secrets.get('HF_TOKEN')
+    
+    if not hf_token:
+        st.error("""
+        ❌ **API Token Required**
+        Add HF_TOKEN to your app secrets or use the SQL Query tab.
+        """)
         return None
     
     client = OpenAI(
