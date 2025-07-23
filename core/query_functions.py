@@ -12,6 +12,7 @@ import requests
 import re
 from datetime import datetime
 from dotenv import load_dotenv
+from openai import OpenAI
 
 from core.database import db_manager
 
@@ -288,64 +289,98 @@ def generate_sql_from_nl(question):
         st.error("❌ API token not found. Please set HF_TOKEN in your environment.")
         return None
     
-    API_URL = "https://router.huggingface.co/featherless-ai/v1/completions"
+    client = OpenAI(
+        base_url = "https://router.huggingface.co/v1",
+        api_key=os.environ['HF_TOKEN'],
+    )
     
-    headers = {
-        "Authorization": f"Bearer {os.environ['HF_TOKEN']}",
-        "Content-Type": "application/json"
-    }
-    
-    # Simplified but clearer prompt
-    schema_context = f"""Generate ONLY a SQL SELECT query for this database:
+    # Prompt for SQL generation
+    system_prompt = """You are an expert SQL generator for a rock mechanics research database.
 
-Tables:
-- plots: id, doi, figure_number, created_at
-- sandstones: id, plot_id, sandstone_name  
-- data_points: id, sandstone_id, p_mpa, q_mpa
+DATABASE SCHEMA:
+- plots: id, doi, figure_number, plot_identifier, created_at
+- sandstones: id, plot_id, sandstone_name, created_at
+- data_points: id, sandstone_id, x_pixel, y_pixel, p_mpa, q_mpa, created_at
 
-Relationships:
-- plots.id -> sandstones.plot_id
-- sandstones.id -> data_points.sandstone_id
+CRITICAL: SANDSTONE NAMING CONVENTION:
+Format: "SandstoneType (Porosity%), FirstAuthor et al. (Year)"
 
-Question: {cleaned_question}
-SQL:"""
-    
-    payload = {
-        "model": "ruslanmv/Meta-Llama-3.1-8B-Text-to-SQL",
-        "prompt": schema_context,
-        "max_tokens": 150,
-        "temperature": 0.1,
-        "stop": [";", "\n\n", "Question:"]
-    }
+EXAMPLES:
+- "Adamswiller (22.6%), Wong et al. (1997)"
+- "Bentheim (22.8%), Baud et al. (2006)"
+
+COMPONENTS:
+1. Sandstone Type: Adamswiller, Bentheim, Berea, etc.
+2. Porosity: Percentage in first parentheses
+3. Research Source: Scientific citation format
+4. Publication Year: Year in second parentheses
+
+QUERY INTERPRETATION PATTERNS:
+- "Bentheim sandstone" → LIKE '%Bentheim%' (match rock type)
+- "Baud studies" → LIKE '%Baud%' (match author)
+- "2006 data" → LIKE '%2006%' (match year)
+- "high porosity" → Need percentage comparison (>20% typical)
+- "recent studies" → Years after 2000 typically
+- "Wong's Adamswiller" → LIKE '%Adamswiller%Wong%'
+
+RESEARCH CONTEXT:
+- p_mpa = pressure in megapascals from triaxial/uniaxial tests
+- q_mpa = deviatoric stress in megapascals
+- Data sources are peer-reviewed publications
+- Porosity significantly affects rock strength behavior
+- Researchers often compare by: rock type, porosity range, study period, research group
+
+SQL GUIDELINES:
+- Use LOWER() for case-insensitive matching
+- Always use LIKE patterns for sandstone_name searches
+- Table aliases: plots p, sandstones s, data_points dp
+- Add LIMIT 50 for large result sets
+- For porosity comparisons, extract number from first parentheses
+- Only SELECT queries
+
+COLUMN SELECTION GUIDELINES:
+For "show data" or "display" queries, select relevant research columns:
+- Always include: s.sandstone_name, dp.p_mpa, dp.q_mpa
+- Often useful: p.doi, p.figure_number
+- For plotting: dp.x_pixel, dp.y_pixel  
+- Avoid: Internal IDs, timestamps, foreign keys
+
+NEVER use SELECT * with JOINs - always specify columns explicitly.
+
+STANDARD "SHOW DATA" FORMAT:
+SELECT s.sandstone_name, dp.p_mpa, dp.q_mpa, p.doi, p.figure_number
+FROM plots p
+JOIN sandstones s ON p.id = s.plot_id  
+JOIN data_points dp ON s.id = dp.sandstone_id
+WHERE [conditions]
+LIMIT 50;
+
+Generate ONLY the SQL query, no explanations."""
     
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-        
-        if response.status_code == 200:
-            result = response.json()
-            generated_sql = result['choices'][0]['text'].strip()
-            
-            # Clean up the generated SQL
-            generated_sql = generated_sql.replace('```sql', '').replace('```', '').strip()
-            
-            # Test and potentially fix the SQL
-            final_sql, was_fixed, fix_message = test_and_fix_sql(generated_sql)
-            
-            # Store both original and fixed for user display
-            if was_fixed:
-                return f"-- ORIGINAL (BROKEN):\n-- {generated_sql.replace(chr(10), chr(10) + '-- ')}\n\n-- AUTO-FIXED VERSION:\n{final_sql}"
-            else:
-                return final_sql
-                
+        completion = client.chat.completions.create(
+            model="meta-llama/Meta-Llama-3-8B-Instruct:groq",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Generate SQL for: {cleaned_question}"}
+            ],
+            max_tokens=150,
+            temperature=0.1
+        )
+
+        # Extract response from chat completion
+        generated_sql = completion.choices[0].message.content.strip()
+        generated_sql = generated_sql.replace('```sql', '').replace('```', '').strip()
+        # Test and potentially fix the SQL
+        final_sql, was_fixed, fix_message = test_and_fix_sql(generated_sql)
+
+        if was_fixed:
+            return f"-- AUTO-FIXED VERSION: \n{final_sql}"
         else:
-            st.error(f"❌ API Error: {response.status_code} - {response.text}")
-            return None
-            
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Connection Error: {e}")
-        return None
+            return final_sql
+    
     except Exception as e:
-        st.error(f"❌ Unexpected Error: {e}")
+        st.error(f"❌ Error generating SQL: {e}")
         return None
 
 def execute_nl_generated_sql(sql_query):
