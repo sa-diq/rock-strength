@@ -9,8 +9,17 @@ from core.database import db_manager
 # Add the project root to the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+@st.cache_data(ttl=30, show_spinner="Loading plots...")
+def get_all_plots_cached():
+    """Cached version of get_all_plots - refreshes every 30 seconds"""
+    return db_manager.get_all_plots()
 
+@st.cache_data(ttl=60)
+def get_plot_data_cached(plot_id):
+    """Cached version of get_plot_data - refreshes every 60 seconds"""
+    return db_manager.get_plot_data(plot_id)
 
+# Page configuration
 st.set_page_config(page_title="Data Management", page_icon="📚", layout="wide")
 
 # Initialize navigation
@@ -59,7 +68,7 @@ def display_plot_card(plot):
         # Show data if requested
         if st.session_state.get(show_data_key, False):
             try:
-                plot_data = db_manager.get_plot_data(plot['id'])
+                plot_data = get_plot_data_cached(plot['id'])
                 if plot_data and plot_data['data_points']:
                     st.markdown("#### 📋 Data Points")
                     
@@ -99,7 +108,7 @@ st.markdown("---")
 
 # Check database connection
 try:
-    plots = db_manager.get_all_plots()
+    plots = get_all_plots_cached()
     
     if not plots:
         st.info("📭 **No plots found in the database**")
@@ -181,7 +190,7 @@ try:
                     try:
                         all_data = []
                         for plot in plots:
-                            plot_data = db_manager.get_plot_data(plot['id'])
+                            plot_data = get_plot_data_cached(plot['id'])
                             if plot_data and plot_data['data_points']:
                                 for point in plot_data['data_points']:
                                     point['doi'] = plot_data['doi']

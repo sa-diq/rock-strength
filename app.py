@@ -5,7 +5,7 @@ import streamlit as st
 # Add the project root to the path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from core.database import init_database
+from core.database import init_database, db_manager
 from navigation import create_navigation
 
 # Page configuration
@@ -63,24 +63,24 @@ This tool allows you to digitize Q-P plots from research papers and extract nume
 ### Database Status
 """)
 
-# Database information
-if db_status["status"] == "success":
-    from core.database import db_manager
-    try:
-        stats = db_manager.get_database_stats()
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("📊 Total Plots", stats.get('plots', 0))
-        with col2:
-            st.metric("🪨 Total Sandstones", stats.get('sandstones', 0))
-        with col3:
-            st.metric("📍 Total Data Points", stats.get('data_points', 0))
-        
-    except Exception as e:
-        st.warning(f"Could not load database statistics: {e}")
-else:
-    st.error("Database not available. Please check your setup.")
+@st.cache_data(ttl=60, show_spinner="Loading database stats...")
+def get_database_stats_cached():
+    """Cached version of database stats - refreshes every 60 seconds"""
+    return db_manager.get_database_stats()
+try:
+    stats = get_database_stats_cached()
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("📊 Total Plots", stats.get('plots', 0))
+    with col2:
+        st.metric("🪨 Total Sandstones", stats.get('sandstones', 0))
+    with col3:
+        st.metric("📍 Total Data Points", stats.get('data_points', 0))
+    
+except Exception as e:
+    st.error(f"Database Issue: {e}")
+
 
 st.markdown("""
 ---

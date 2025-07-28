@@ -1,16 +1,20 @@
 # navigation.py - Custom navigation for Q-P Digitization Tool
 import streamlit as st
 
-def create_navigation():
-    """Create clean horizontal navigation for Q-P digitizer"""
-    
-    # Header with branding
-    st.markdown("""
+@st.cache_data
+def get_navigation_header_html():
+    """Cache the navigation header HTML"""
+    return """
     <div style="background-color: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
         <h2 style="margin: 0; color: #262730;">🔬 Q-P Plot Digitizer</h2>
         <p style="margin: 0; color: #666;">Rock Density Research Tool</p>
     </div>
-    """, unsafe_allow_html=True)
+    """
+
+def create_navigation():
+    """Create clean horizontal navigation for Q-P digitizer"""
+    
+    st.markdown(get_navigation_header_html(), unsafe_allow_html=True)
     
     # Navigation buttons
     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])

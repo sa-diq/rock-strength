@@ -177,6 +177,7 @@ def proceed_to_next_sandstone():
             plot_id = db_manager.save_complete_plot(plot_data)
             st.session_state.final_plot_id = plot_id
             st.session_state.step = 4  # Go to completion page
+            st.cache_data.clear()
             
         except Exception as e:
             st.error(f"❌ Error saving plot: {e}")
