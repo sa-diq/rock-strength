@@ -25,6 +25,11 @@ from core.query_functions import (
 from core.database import db_manager
 from navigation import create_navigation
 
+@st.cache_data(ttl=60)
+def get_database_stats_for_query_page():
+    """Cached stats for query page"""
+    return db_manager.get_database_stats()
+
 st.set_page_config(page_title="Database Queries", page_icon="🔍", layout="wide")
 
 # Initialize navigation
@@ -313,7 +318,7 @@ with tab_nl:
     st.markdown("---")
     st.markdown("#### 📊 Database Overview")
     try:
-        stats = db_manager.get_database_stats()
+        stats = get_database_stats_for_query_page()
         col1, col2, col3 = st.columns(3)
         
         with col1:
