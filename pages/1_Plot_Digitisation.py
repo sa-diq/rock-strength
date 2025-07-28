@@ -110,14 +110,17 @@ def go_back():
                 st.session_state.extract_sub_phase = "name_entry"
             elif st.session_state.extract_sub_phase == "name_entry":
                 if st.session_state.current_sandstone_index > 0:
-                    # Back to previous sandstone (confirmed state)
+                    # Back to previous sandstone - go to validate state so user can see the validation overlay
                     st.session_state.current_sandstone_index -= 1
-                    st.session_state.sandstone_validation_status = "confirmed"
-                    st.session_state.extract_sub_phase = "name_entry"
-                    # Load previous sandstone data
+                    st.session_state.sandstone_validation_status = "validate"
+                    
+                    # Load previous sandstone data from the validated list
                     prev_sandstone = st.session_state.validated_sandstones[-1]
                     st.session_state.current_sandstone_name = prev_sandstone['name']
                     st.session_state.current_sandstone_points = prev_sandstone['points']
+                    
+                    # IMPORTANT: Remove from validated list to avoid duplicates when user validates again
+                    st.session_state.validated_sandstones.pop()
                 else:
                     # Back to calibration
                     st.session_state.step = 2
