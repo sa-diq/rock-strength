@@ -42,7 +42,7 @@ else:
     st.sidebar.error(f"❌ Database Issue: {db_status['message']}")
 
 # Main page content
-st.title("🔬 Q-P Plot Digitizer")
+st.title("Q-P Plot Digitizer")
 
 st.markdown("""
 ### Welcome to the Q-P Plot Digitizer
@@ -50,40 +50,14 @@ st.markdown("""
 This tool allows you to digitize Q-P plots from research papers and extract numerical data points.
 
 **Features:**
-- **🔬 Plot Digitisation**: Upload and digitise new Q-P plots
-- **📚 Data Management**: View and manage your digitised plots
-- **📊 Analytics**: Monitor your digitization progress
+- **Plot Digitisation**: Upload and digitise new Q-P plots
+- **Data Management**: View and manage digitised plots
+- **Database Query**: Query the database using SQL and natural language
 
-**Getting Started**
-1. Use the navigation sidebar to select a page
-2. Start with **Plot Digitisation** to process your first plot
-3. Use **Data Management** to manage your digitised plots
-4. Check **Analytics** to see your progress
-
-### Database Status
 """)
-
-@st.cache_data(ttl=60, show_spinner="Loading database stats...")
-def get_database_stats_cached():
-    """Cached version of database stats - refreshes every 60 seconds"""
-    return db_manager.get_database_stats()
-try:
-    stats = get_database_stats_cached()
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("📊 Total Plots", stats.get('plots', 0))
-    with col2:
-        st.metric("🪨 Total Sandstones", stats.get('sandstones', 0))
-    with col3:
-        st.metric("📍 Total Data Points", stats.get('data_points', 0))
-    
-except Exception as e:
-    st.error(f"Database Issue: {e}")
-
 
 st.markdown("""
 ---
 ### About
-This tool helps researchers extract numerical data from Q-P plots in scientific publications.
+This tool helps researchers extract numerical data from Q-P plots in scientific publications and download digitised data.
 """)
