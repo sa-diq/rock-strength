@@ -34,7 +34,7 @@ def format_timestamp(timestamp):
 def display_plot_card(plot):
     """Display a single plot card with actions"""
     # Create a more descriptive title
-    plot_title = f"📊 **{plot['doi']} Fig {plot['figure_number']}**"
+    plot_title = f"**{plot['doi']} Fig {plot['figure_number']}**"
     
     with st.expander(f"{plot_title} ({format_timestamp(plot['created_at'])})"):
         # Plot information
@@ -42,13 +42,11 @@ def display_plot_card(plot):
         
         with col1:
             st.markdown(f"""
-            **🔗 DOI:** {plot['doi']}  
-            **📄 Figure:** {plot['figure_number']}  
-            **🏷️ Identifier:** {plot['plot_identifier']}  
-            **📏 X-axis range:** {plot['x_axis_range'] or 'Not specified'}  
-            **📏 Y-axis range:** {plot['y_axis_range'] or 'Not specified'}  
-            **🪨 Number of Sandstones:** {plot['sandstone_count']}  
-            **📍 Total Data Points:** {plot['total_points']}  
+            **DOI:** {plot['doi']}  
+            **Figure:** {plot['figure_number']}  
+            **Identifier:** {plot['plot_identifier']}  
+            **Number of Sandstones:** {plot['sandstone_count']}  
+            **Total Data Points:** {plot['total_points']}  
             """)
         
         with col2:
@@ -57,11 +55,11 @@ def display_plot_card(plot):
             
             # View/Hide data toggle
             if st.session_state.get(show_data_key, False):
-                if st.button("🙈 Hide Data", key=f"hide_{plot['id']}"):
+                if st.button("Hide Data", key=f"hide_{plot['id']}"):
                     st.session_state[show_data_key] = False
                     st.rerun()
             else:
-                if st.button("👁️ View Data", key=f"view_{plot['id']}"):
+                if st.button("View Data", key=f"view_{plot['id']}"):
                     st.session_state[show_data_key] = True
                     st.rerun()
         
@@ -70,19 +68,7 @@ def display_plot_card(plot):
             try:
                 plot_data = get_plot_data_cached(plot['id'])
                 if plot_data and plot_data['data_points']:
-                    st.markdown("#### 📋 Data Points")
-                    
                     df = pd.DataFrame(plot_data['data_points'])
-                    
-                    # Data summary
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Points", len(df))
-                    with col2:
-                        st.metric("P(MPa)", f"{df['p_mpa'].min():.1f} - {df['p_mpa'].max():.1f}")
-                    with col3:
-                        st.metric("Q(MPa)", f"{df['q_mpa'].min():.1f} - {df['q_mpa'].max():.1f}")
-                    
                     # Data table
                     st.dataframe(df, use_container_width=True)
                     
@@ -102,7 +88,7 @@ def display_plot_card(plot):
                 st.error(f"❌ Error loading plot data: {e}")
 
 # Page header
-st.title("📚 Browse Historical Data")
+st.title("Browse Digitised Data")
 st.markdown("Manage and explore your digitized Q-P plots")
 st.markdown("---")
 
@@ -111,7 +97,7 @@ try:
     plots = get_all_plots_cached()
     
     if not plots:
-        st.info("📭 **No plots found in the database**")
+        st.info("**No plots found in the database**")
         st.markdown("""
         ### Getting Started
         1. Go to the **🔬 Digitize** page
@@ -124,13 +110,11 @@ try:
         total_points = sum(plot['total_points'] for plot in plots)
         total_sandstones = sum(plot['sandstone_count'] for plot in plots)
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
-            st.metric("📊 Total Plots", len(plots))
+            st.metric("Total Plots", len(plots))
         with col2:
-            st.metric("🪨 Total Sandstones", total_sandstones)
-        with col3:
-            st.metric("📍 Total Data Points", total_points)
+            st.metric("Total Data Points", total_points)
         
         st.markdown("---")
         
@@ -138,13 +122,13 @@ try:
         col1, col2 = st.columns([2, 1])
         with col1:
             search_term = st.text_input(
-                "🔍 Search plots", 
+                "Search plots", 
                 placeholder="Search by DOI, figure number",
                 help="Filter plots by DOI, figure number, or plot identifier"
             )
         with col2:
             sort_option = st.selectbox(
-                "📅 Sort by",
+                "Sort by",
                 ["Newest first", "Oldest first", "DOI A-Z", "DOI Z-A"],
                 help="Choose how to sort the plots"
             )
@@ -177,7 +161,7 @@ try:
             for plot in filtered_plots:
                 display_plot_card(plot)
         else:
-            st.warning(f"🔍 No plots found matching '{search_term}'")
+            st.warning(f"No plots found matching '{search_term}'")
         
         # Bulk data download
         if len(plots) > 1:
