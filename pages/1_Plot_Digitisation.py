@@ -197,7 +197,7 @@ def proceed_to_next_sandstone():
 init_session_state()
 
 # Page header
-st.title("🔬 Digitize Q-P Plots")
+st.title("Digitise Q-P Plots")
 st.markdown("---")
 
 # Progress indicator
@@ -228,7 +228,7 @@ if uploaded_file:
 
     # Step 1: Enter metadata (unchanged from original)
     if st.session_state.step == 1:
-        st.markdown("### 📝 Publication Information")
+        st.markdown("### Publication Information")
         
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -519,8 +519,6 @@ if uploaded_file:
         st.info("💡 **Tip**: Use the 'Data Management' tab above to view, search, and manage all your digitized plots.")
 
 else:
-    st.info("👆 Please upload a Q-P plot image to begin digitization")
-    
     # Show helpful instructions (unchanged from original)
     st.markdown("""
     ### 📋 Instructions
@@ -532,12 +530,12 @@ else:
     
     ### 💡 Tips
     - Use high-resolution images for better accuracy
-    - Enter complete DOI (e.g., 10.1016/j.jrmge.2023.02.015)
+    - Enter complete DOI (see examples below)
     - Include figure letters/numbers (e.g., 1a, 2b, 3)
     - Ensure axes are clearly visible in the image
-    - **New**: Each sandstone is validated individually for better quality control
+    - Each sandstone is validated individually for better quality control
     
-    ### 📄 DOI Format Examples
+    ### DOI Format Examples
     - `10.1016/j.jrmge.2023.02.015`
     - `https://doi.org/10.1016/j.jrmge.2023.02.015`
     - `doi:10.1016/j.jrmge.2023.02.015`
