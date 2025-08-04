@@ -46,46 +46,46 @@ if 'nl_question' not in st.session_state:
     st.session_state.nl_question = ""
 
 # Page header
-st.title("🔍 Database Queries")
+st.title("Database Queries")
 st.markdown("Query your research data using SQL or natural language")
 st.markdown("---")
 
 # Add link to detailed schema page
-st.markdown("### 📋 Database Schema")
-st.info("📊 **View Database Schema** - For entity relationship diagram and table structure:")
-st.page_link("pages/4_Database_Schema.py", label="📊 View Full Schema", icon="📊")
+st.markdown("### Database Schema")
+st.info("Click below for entity relationship diagram and table structure:")
+st.page_link("pages/4_Database_Schema.py", label="**View Full Schema**")
 
 # Create tabs
-tab_sql, tab_nl = st.tabs(["⚡ SQL Query", "🤖 Generative AI"])
+tab_sql, tab_nl = st.tabs(["SQL Query", "Natural Language with Generative AI"])
 
 # =============================================================================
 # SQL TAB
 # =============================================================================
 
 with tab_sql:
-    st.markdown("### 🛠️ SQL Query Interface")
+    st.markdown("### SQL Query Interface")
     st.markdown("---")
     
     # Example queries
-    st.markdown("### 💡 Example Queries")
+    st.markdown("### Example Queries")
     examples = get_example_queries()
     
     example_cols = st.columns(4)
     for i, example in enumerate(examples):
         with example_cols[i]:
-            if st.button(f"📋 {example['title']}", key=f"example_{i}"):
+            if st.button(f" {example['title']}", key=f"example_{i}"):
                 st.session_state.sql_query_value = example['query']
                 st.rerun()
     
     st.markdown("---")
     
     # Query input
-    st.markdown("### ✍️ Write Your Query")
+    st.markdown("### Write Your Query")
     
     # Query history dropdown
     if st.session_state.query_history:
         selected_history = st.selectbox(
-            "📚 Recent Queries:",
+            "Recent Queries:",
             options=[""] + st.session_state.query_history,
             format_func=lambda x: "Select from history..." if x == "" else x[:100] + "..." if len(x) > 100 else x,
             key="history_select"
@@ -98,8 +98,8 @@ with tab_sql:
     # SQL text area - use value parameter for control
     query = st.text_area(
         "Enter your SQL query:",
-        height=150,
-        placeholder="SELECT * FROM plots WHERE created_at >= date('now', '-7 days');",
+        height=200,
+        placeholder="SELECT COUNT(*) as total_plots FROM plots;",
         value=st.session_state.get('sql_query_value', ''),
         key="sql_query_input"
     )
@@ -111,9 +111,9 @@ with tab_sql:
     # Execute button
     col1, col2 = st.columns([1, 4])
     with col1:
-        execute_button = st.button("▶️ Execute Query", type="primary")
+        execute_button = st.button("Execute Query", type="primary")
     with col2:
-        if st.button("🗑️ Clear Query", key="clear_button"):
+        if st.button("Clear Query", key="clear_button"):
             st.session_state.sql_query_value = ""
             st.rerun()
     
@@ -144,10 +144,10 @@ with tab_sql:
                     )
                 
                 with col2:
-                    st.info(f"💡 Showing {len(df)} rows (max 50). Use LIMIT in your query for pagination.")
+                    st.info(f"Showing {len(df)} rows (max 50).")
             
             else:
-                st.info("📭 Query executed successfully but returned no results.")
+                st.info("Query executed successfully but returned no results.")
         
         else:
             st.error(f"❌ **Query Error:**\n```\n{result['error']}\n```")
@@ -161,9 +161,6 @@ with tab_sql:
 
 with tab_nl:
     st.markdown("### Natural Language Query Interface")
-    
-    # Step 1: Question Input
-    st.markdown("#### Ask a question about the data in the database")
     
     # Handle example question selection
     if 'example_question' in st.session_state:
@@ -228,7 +225,7 @@ with tab_nl:
                 if i < len(suggestions):
                     st.caption(f"  💡 Suggestion: {suggestions[i]}")
             
-            st.info("💡 **Tip:** Review the SQL above. You can copy it to the SQL tab for manual editing if needed.")
+            st.info("**Tip:** Review the SQL above. You can copy it to the SQL tab for manual editing if needed.")
         
         # Step 5: Execute Button
         col1, col2 = st.columns([1, 3])
@@ -282,7 +279,7 @@ with tab_nl:
     
     # Step 7: Example Questions
     st.markdown("---")
-    st.markdown("#### 💡 Example Questions")
+    st.markdown("#### Example Questions")
     
     example_questions = get_example_nl_questions()
     
@@ -291,7 +288,7 @@ with tab_nl:
     
     for i, example in enumerate(example_questions):
         with col1 if i % 2 == 0 else col2:
-            if st.button(f"💬 {example}", key=f"example_nl_{i}", help="Click to use this question"):
+            if st.button(f"{example}", key=f"example_nl_{i}", help="Click to use this question"):
                 st.session_state.example_question = example
                 st.rerun()
     
@@ -313,22 +310,6 @@ with tab_nl:
         
         **Remember:** The AI generates SQL based on your database schema, then executes it against your real data.
         """)
-    
-    # Show current database stats
-    st.markdown("---")
-    st.markdown("#### 📊 Database Overview")
-    try:
-        stats = get_database_stats_for_query_page()
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("📊 Plots", stats.get('plots', 0))
-        with col2:
-            st.metric("🪨 Sandstones", stats.get('sandstones', 0))
-        with col3:
-            st.metric("📍 Data Points", stats.get('data_points', 0))
-    except:
-        st.error("Unable to load database statistics")
 
 # Footer
 st.markdown("---")
