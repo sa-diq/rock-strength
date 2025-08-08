@@ -1,35 +1,34 @@
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import os
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
-    def __init__(self, db_path=None):
-        if db_path is None:
-            # Get the directory where this script is located
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            # Go up one level to the project root
-            project_root = os.path.dirname(script_dir)
-            # Create data directory path
-            db_path = os.path.join(project_root, 'data', 'plots.db')
-        
-        self.db_path = db_path
-        # Ensure data directory exists
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+    def __init__(self):
+        self.database_url = os.getenv('DATABASE_URL')
+        if not self.database_url:
+            raise Exception("DATABASE_URL not found in environment variables")
     
     def get_connection(self):
         """Get a new database connection for thread safety"""
         try:
-            connection = sqlite3.connect(self.db_path, check_same_thread=False)
-            connection.row_factory = sqlite3.Row  # Enable column access by name
+            connection = psycopg2.connect(
+                self.database_url,
+                cursor_factory=psycopg2.extras.RealDictCursor
+            )
             return connection
-        except sqlite3.Error as e:
-            logger.error(f"Error connecting to SQLite: {e}")
+        except psycopg2.Error as e:
+            logger.error(f"Error connecting to PostgreSQL: {e}")
             return None
     
     def connect(self):
@@ -37,7 +36,7 @@ class DatabaseManager:
         connection = self.get_connection()
         if connection:
             connection.close()
-            logger.info(f"Successfully connected to SQLite database: {self.db_path}")
+            logger.info("Successfully connected to PostgreSQL database")
             return True
         return False
     
@@ -45,117 +44,20 @@ class DatabaseManager:
         """No-op for compatibility"""
         pass
     
-    def check_schema_version(self):
-        """Check if database has new DOI-based schema"""
-        connection = self.get_connection()
-        if not connection:
-            return False
-            
-        try:
-            cursor = connection.cursor()
-            # Check if DOI column exists in plots table
-            cursor.execute("PRAGMA table_info(plots)")
-            columns = [row[1] for row in cursor.fetchall()]
-            has_doi = 'doi' in columns
-            cursor.close()
-            connection.close()
-            return has_doi
-        except sqlite3.Error:
-            if connection:
-                connection.close()
-            return False
-    
-    def migrate_database(self):
-        """Migrate old database to new DOI-based schema"""
-        connection = self.get_connection()
-        if not connection:
-            return False
-            
-        try:
-            cursor = connection.cursor()
-            logger.info("Starting database migration to DOI-based schema...")
-            
-            # Backup old data
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = cursor.fetchall()
-            
-            if any('plots' in str(table) for table in tables):
-                # Check if we have old data
-                cursor.execute("SELECT COUNT(*) FROM plots")
-                old_count = cursor.fetchone()[0]
-                
-                if old_count > 0:
-                    logger.warning(f"Found {old_count} plots in old format. Creating backup...")
-                    
-                    # Create backup table
-                    cursor.execute("""
-                        CREATE TABLE IF NOT EXISTS plots_backup AS 
-                        SELECT * FROM plots
-                    """)
-                    
-                    # Drop old tables to recreate with new schema
-                    cursor.execute("DROP TABLE IF EXISTS data_points")
-                    cursor.execute("DROP TABLE IF EXISTS sandstones") 
-                    cursor.execute("DROP TABLE IF EXISTS plots")
-                    
-                    logger.info("Old tables backed up and removed")
-                else:
-                    # No data, just drop tables
-                    cursor.execute("DROP TABLE IF EXISTS data_points")
-                    cursor.execute("DROP TABLE IF EXISTS sandstones")
-                    cursor.execute("DROP TABLE IF EXISTS plots")
-            
-            connection.commit()
-            cursor.close()
-            connection.close()
-            logger.info("Database migration completed")
-            return True
-            
-        except sqlite3.Error as e:
-            logger.error(f"Error during migration: {e}")
-            if connection:
-                connection.close()
-            return False
-    
     def create_tables(self):
-        """Create all required tables"""
+        """Create all required tables - NEW SCHEMA WITHOUT IMAGES"""
         connection = self.get_connection()
         if not connection:
-            logger.error(f"Cannot create connection to database at: {self.db_path}")
+            logger.error("Cannot create connection to database")
             return False
         
-        # Check if we need to migrate
-        if not self.check_schema_version():
-            logger.info("Old database schema detected, migrating...")
-            if not self.migrate_database():
-                logger.error("Database migration failed")
-                connection.close()
-                return False
-            # Get new connection after migration
-            connection.close()
-            connection = self.get_connection()
-            if not connection:
-                return False
-            
-        try:
-            # Test if we can write to the database location
-            test_file = os.path.join(os.path.dirname(self.db_path), 'test_write.tmp')
-            with open(test_file, 'w') as f:
-                f.write('test')
-            os.remove(test_file)
-            logger.info(f"Write permissions confirmed for: {os.path.dirname(self.db_path)}")
-        except Exception as e:
-            logger.error(f"No write permissions for database directory: {e}")
-            return False
-            
         tables = {
             'plots': """
                 CREATE TABLE IF NOT EXISTS plots (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     doi TEXT NOT NULL,
                     figure_number TEXT NOT NULL,
                     plot_identifier TEXT UNIQUE NOT NULL,
-                    image_path TEXT NOT NULL,
                     x_axis_range TEXT,
                     y_axis_range TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -165,7 +67,7 @@ class DatabaseManager:
             """,
             'sandstones': """
                 CREATE TABLE IF NOT EXISTS sandstones (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     plot_id INTEGER NOT NULL,
                     sandstone_name TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -175,7 +77,7 @@ class DatabaseManager:
             """,
             'data_points': """
                 CREATE TABLE IF NOT EXISTS data_points (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     sandstone_id INTEGER NOT NULL,
                     x_pixel REAL NOT NULL,
                     y_pixel REAL NOT NULL,
@@ -207,11 +109,12 @@ class DatabaseManager:
             connection.commit()
             cursor.close()
             connection.close()
-            logger.info(f"Database successfully initialized at: {self.db_path}")
+            logger.info("PostgreSQL database successfully initialized")
             return True
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             logger.error(f"Error creating tables: {e}")
-            connection.close()
+            if connection:
+                connection.close()
             return False
     
     def check_plot_exists(self, doi: str, figure_number: str) -> bool:
@@ -222,13 +125,14 @@ class DatabaseManager:
             
         try:
             cursor = connection.cursor()
-            cursor.execute("SELECT COUNT(*) FROM plots WHERE doi = ? AND figure_number = ?", (doi, figure_number))
+            cursor.execute("SELECT COUNT(*) FROM plots WHERE doi = %s AND figure_number = %s", (doi, figure_number))
             count = cursor.fetchone()[0]
             cursor.close()
             connection.close()
             return count > 0
-        except sqlite3.Error as e:
-            connection.close()
+        except psycopg2.Error as e:
+            if connection:
+                connection.close()
             logger.error(f"Error checking plot existence: {e}")
             raise Exception(f"Database error: {e}")
     
@@ -243,7 +147,7 @@ class DatabaseManager:
         return f"{clean_doi}_Fig{clean_fig}"
     
     def save_complete_plot(self, plot_data: Dict) -> int:
-        """Save complete plot data in a single transaction"""
+        """Save complete plot data in a single transaction - NO IMAGE STORAGE"""
         connection = self.get_connection()
         if not connection:
             raise Exception("Cannot connect to database")
@@ -253,21 +157,21 @@ class DatabaseManager:
             cursor = connection.cursor()
             
             # Begin transaction
-            cursor.execute("BEGIN TRANSACTION")
+            cursor.execute("BEGIN")
             
-            # Insert plot
+            # Insert plot (without image_path)
             cursor.execute("""
-                INSERT INTO plots (doi, figure_number, plot_identifier, image_path, x_axis_range, y_axis_range)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO plots (doi, figure_number, plot_identifier, x_axis_range, y_axis_range)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
             """, (
                 plot_data['doi'],
                 plot_data['figure_number'],
                 plot_data['plot_identifier'],
-                plot_data['image_path'],
                 plot_data['x_axis_range'],
                 plot_data['y_axis_range']
             ))
-            plot_id = cursor.lastrowid
+            plot_id = cursor.fetchone()[0]
             
             # Group data points by sandstone
             sandstone_data = {}
@@ -282,9 +186,10 @@ class DatabaseManager:
                 # Insert sandstone
                 cursor.execute("""
                     INSERT INTO sandstones (plot_id, sandstone_name)
-                    VALUES (?, ?)
+                    VALUES (%s, %s)
+                    RETURNING id
                 """, (plot_id, sandstone_name))
-                sandstone_id = cursor.lastrowid
+                sandstone_id = cursor.fetchone()[0]
                 
                 # Insert data points for this sandstone
                 point_values = [
@@ -294,7 +199,7 @@ class DatabaseManager:
                 ]
                 cursor.executemany("""
                     INSERT INTO data_points (sandstone_id, x_pixel, y_pixel, p_mpa, q_mpa)
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s)
                 """, point_values)
             
             # Commit transaction
@@ -304,11 +209,12 @@ class DatabaseManager:
             logger.info(f"Plot '{plot_data['plot_identifier']}' saved successfully with ID {plot_id}")
             return plot_id
             
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             if cursor:
                 cursor.execute("ROLLBACK")
                 cursor.close()
-            connection.close()
+            if connection:
+                connection.close()
             logger.error(f"Error saving plot data: {e}")
             raise Exception(f"Database error: {e}")
     
@@ -340,7 +246,7 @@ class DatabaseManager:
                     'plot_identifier': row['plot_identifier'],
                     'x_axis_range': row['x_axis_range'],
                     'y_axis_range': row['y_axis_range'],
-                    'created_at': datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
+                    'created_at': datetime.fromisoformat(row['created_at'].isoformat()) if row['created_at'] else None,
                     'sandstone_count': row['sandstone_count'],
                     'total_points': row['total_points']
                 })
@@ -348,8 +254,9 @@ class DatabaseManager:
             cursor.close()
             connection.close()
             return plots
-        except sqlite3.Error as e:
-            connection.close()
+        except psycopg2.Error as e:
+            if connection:
+                connection.close()
             logger.error(f"Error retrieving plots: {e}")
             raise Exception(f"Database error: {e}")
     
@@ -363,7 +270,7 @@ class DatabaseManager:
             cursor = connection.cursor()
             
             # Get plot info
-            cursor.execute("SELECT * FROM plots WHERE id = ?", (plot_id,))
+            cursor.execute("SELECT * FROM plots WHERE id = %s", (plot_id,))
             plot_row = cursor.fetchone()
             
             if not plot_row:
@@ -379,7 +286,7 @@ class DatabaseManager:
                 SELECT s.sandstone_name, dp.x_pixel, dp.y_pixel, dp.p_mpa, dp.q_mpa
                 FROM sandstones s
                 JOIN data_points dp ON s.id = dp.sandstone_id
-                WHERE s.plot_id = ?
+                WHERE s.plot_id = %s
                 ORDER BY s.sandstone_name, dp.id
             """, (plot_id,))
             
@@ -394,8 +301,9 @@ class DatabaseManager:
             plot['data_points'] = data_points
             return plot
             
-        except sqlite3.Error as e:
-            connection.close()
+        except psycopg2.Error as e:
+            if connection:
+                connection.close()
             logger.error(f"Error retrieving plot data: {e}")
             raise Exception(f"Database error: {e}")
     
@@ -408,32 +316,20 @@ class DatabaseManager:
         try:
             cursor = connection.cursor()
             
-            # Get image path before deletion
-            cursor.execute("SELECT image_path FROM plots WHERE id = ?", (plot_id,))
-            result = cursor.fetchone()
-            image_path = result['image_path'] if result else None
-            
             # Delete plot (cascades to sandstones and data_points)
-            cursor.execute("DELETE FROM plots WHERE id = ?", (plot_id,))
+            cursor.execute("DELETE FROM plots WHERE id = %s", (plot_id,))
             affected_rows = cursor.rowcount
             
             connection.commit()
             cursor.close()
             connection.close()
             
-            # Remove image file if it exists
-            if image_path and os.path.exists(image_path):
-                try:
-                    os.remove(image_path)
-                    logger.info(f"Deleted image file: {image_path}")
-                except OSError as e:
-                    logger.warning(f"Could not delete image file {image_path}: {e}")
-            
             logger.info(f"Plot {plot_id} deleted successfully")
             return affected_rows > 0
             
-        except sqlite3.Error as e:
-            connection.close()
+        except psycopg2.Error as e:
+            if connection:
+                connection.close()
             logger.error(f"Error deleting plot: {e}")
             raise Exception(f"Database error: {e}")
     
@@ -456,8 +352,9 @@ class DatabaseManager:
             cursor.execute("SELECT COUNT(*) FROM data_points")
             point_count = cursor.fetchone()[0]
             
-            # Get database file size
-            db_size = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
+            # Get database size
+            cursor.execute("SELECT pg_size_pretty(pg_database_size(current_database()))")
+            db_size = cursor.fetchone()[0]
             
             cursor.close()
             connection.close()
@@ -466,11 +363,12 @@ class DatabaseManager:
                 'plots': plot_count,
                 'sandstones': sandstone_count,
                 'data_points': point_count,
-                'database_size_mb': round(db_size / (1024 * 1024), 2)
+                'database_size': db_size
             }
             
-        except sqlite3.Error as e:
-            connection.close()
+        except psycopg2.Error as e:
+            if connection:
+                connection.close()
             logger.error(f"Error getting database stats: {e}")
             return {}
 
