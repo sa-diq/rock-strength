@@ -4,25 +4,19 @@
 # APPLICATION-SPECIFIC FILES
 # ============================================================================
 
-# Database files
-# data/
-# *.db
-# *.sqlite
-# *.sqlite3
+# Database files (SQLite backups, any local databases)
+data/
+archive/
+*.db
+*.sqlite
+*.sqlite3
 
-# Uploaded plot images
-uploads/
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.bmp
-*.tiff
-
-# Configuration files (if you add them later)
+# Configuration files with secrets
+.env
+.env.local
+.env.production
 config.py
 config.json
-.env
 
 # Exported data files
 *.csv
@@ -177,7 +171,7 @@ cython_debug/
 # Streamlit cache
 .streamlit/
 
-# Streamlit secrets
+# Streamlit secrets (contains DATABASE_URL)
 secrets.toml
 
 # ============================================================================
@@ -307,18 +301,6 @@ test_*.py
 *_test.py
 tests/
 testing/
-
-# ============================================================================
-# RESEARCH DATA (Optional - Uncomment if needed)
-# ============================================================================
-
-# Uncomment these if you don't want to track large research files
-# *.pdf
-# *.docx
-# *.xlsx
-# research_papers/
-# literature/
-# experimental_data/
 
 # ============================================================================
 # DOCUMENTATION BUILD FILES
