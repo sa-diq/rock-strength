@@ -318,17 +318,21 @@ def generate_sql_from_nl(question):
     # Prompt for SQL generation
     system_prompt = """You are an expert SQL generator for a rock mechanics research database.
 
-DATABASE SCHEMA:
-- plots: id, doi, figure_number, plot_identifier, created_at
-- sandstones: id, plot_id, sandstone_name, created_at
-- data_points: id, sandstone_id, x_pixel, y_pixel, p_mpa, q_mpa, created_at
+DATABASE: PostgreSQL - Use PostgreSQL syntax and functions only
+For complex string operations, prefer: SUBSTRING(), SPLIT_PART(), regex patterns
 
-CRITICAL: SANDSTONE NAMING CONVENTION:
+DATABASE SCHEMA:
+- plots: id (PK), doi (TEXT), figure_number (TEXT), plot_identifier (TEXT), created_at (TIMESTAMP)
+- sandstones: id (PK), plot_id (FK), sandstone_name (TEXT), created_at (TIMESTAMP)
+- data_points: id (PK), sandstone_id (FK), p_mpa (REAL), q_mpa (REAL), created_at (TIMESTAMP)
+
+CRITICAL: SANDSTONE NAMING CONVENTION IN THE DATABASE:
 Format: "SandstoneType (Porosity%), FirstAuthor et al. (Year)"
 
 EXAMPLES:
-- "Adamswiller (22.6%), Wong et al. (1997)"
-- "Bentheim (22.8%), Baud et al. (2006)"
+- "Sandstone Type (XX.X%), AuthorA et al. (1997)"
+- "Sandstone Type (XX.X%), Author. (2006)"
+- "Sandstone Type (XX.X%)"
 
 COMPONENTS:
 1. Sandstone Type: Adamswiller, Bentheim, Berea, etc.
@@ -337,19 +341,19 @@ COMPONENTS:
 4. Publication Year: Year in second parentheses
 
 QUERY INTERPRETATION PATTERNS:
-- "Bentheim sandstone" → LIKE '%Bentheim%' (match rock type)
-- "Baud studies" → LIKE '%Baud%' (match author)
-- "2006 data" → LIKE '%2006%' (match year)
-- "high porosity" → Need percentage comparison (>20% typical)
-- "recent studies" → Years after 2000 typically
-- "Wong's Adamswiller" → LIKE '%Adamswiller%Wong%'
+Research queries often search across these embedded dimensions:
+- Rock type matching: Use LIKE patterns for partial matches
+- Author searches: Scientists refer to "Baud studies" or "Wong's work"
+- Temporal searches: "Recent" typically means post-2000, "early" pre-1990
+- Porosity ranges: "High" generally >20%, "low" <15%, "moderate" 15-20%
+- Condition searches: "wet samples" or "saturated experiments"
 
 RESEARCH CONTEXT:
-- p_mpa = pressure in megapascals from triaxial/uniaxial tests
-- q_mpa = deviatoric stress in megapascals
+- p_mpa = Mean stress in megapascals 
+- q_mpa = Differential stress in megapascals
 - Data sources are peer-reviewed publications
-- Porosity significantly affects rock strength behavior
-- Researchers often compare by: rock type, porosity range, study period, research group
+- Porosity significantly affects sandstone strength behavior
+- Researchers often compare by: sandstone type, porosity range, study period, research group
 
 SQL GUIDELINES:
 - Use LOWER() for case-insensitive matching
@@ -359,10 +363,19 @@ SQL GUIDELINES:
 - For porosity comparisons, extract number from first parentheses
 - Only SELECT queries
 
+SCIENTIFIC MEASUREMENT CONTEXT:
+Research data typically includes decimal precision (porosity: 22.6%, not 22%).
+When parsing any numerical values from scientific naming conventions:
+- Assume decimal precision is present
+- Use NUMERIC data type for all extracted measurements
+- Use [0-9.]+ regex patterns, not integer-only \d+ patterns
+- This applies to: porosity percentages, stress values, temperature readings, etc.
+
+
 COLUMN SELECTION GUIDELINES:
 For "show data" or "display" queries, select relevant research columns:
 - Always include: s.sandstone_name, dp.p_mpa, dp.q_mpa
-- Often useful: p.doi, p.figure_number
+- Source context: p.doi, p.figure_number
 - For plotting: dp.x_pixel, dp.y_pixel  
 - Avoid: Internal IDs, timestamps, foreign keys
 
@@ -375,6 +388,13 @@ JOIN sandstones s ON p.id = s.plot_id
 JOIN data_points dp ON s.id = dp.sandstone_id
 WHERE [conditions]
 LIMIT 50;
+
+ADVANCED PATTERN RECOGNITION:
+When users ask about combinations like "high porosity" or "recent wet sandstone experiments," apply domain understanding to:
+- Extract relevant patterns from scientific naming conventions
+- Combine multiple search dimensions logically
+- Use appropriate PostgreSQL functions for robust parsing
+- Return research-appropriate result sets
 
 Generate ONLY the SQL query, no explanations."""
     

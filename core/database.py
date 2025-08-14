@@ -45,7 +45,7 @@ class DatabaseManager:
         pass
     
     def create_tables(self):
-        """Create all required tables - NEW SCHEMA WITHOUT IMAGES"""
+        """Create all required tables """
         connection = self.get_connection()
         if not connection:
             logger.error("Cannot create connection to database")
