@@ -275,7 +275,7 @@ if uploaded_file:
                     else:
                         validation_messages.append(f"✅ Plot identifier: {plot_identifier}")
                 except Exception as e:
-                    validation_messages.append(f"❌ Error checking for duplicates: {e}")
+                    validation_messages.append(f"Error checking for duplicates: {e} duplicate")
         
         # Display validation messages
         for message in validation_messages:
