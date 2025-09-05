@@ -5,6 +5,7 @@
 # ============================================================================
 
 # Database files (SQLite backups, any local databases)
+data/
 archive/
 *.db
 *.sqlite
