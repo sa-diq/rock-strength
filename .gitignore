@@ -10,6 +10,8 @@ archive/
 *.db
 *.sqlite
 *.sqlite3
+.html
+
 
 # Configuration files with secrets
 .env
