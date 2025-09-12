@@ -4,13 +4,9 @@ Contains both regular SQL query functions and Natural Language to SQL functions
 """
 
 import os
-import sys
 import streamlit as st
-import pandas as pd
-import sqlite3
-import requests
 import re
-from datetime import datetime
+import time
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -275,9 +271,7 @@ def clean_user_question(question):
     # Add more cleanup rules as needed
     return question.strip()
 
-# Replace your generate_sql_from_nl function in core/query_functions.py with this:
-
-import time
+# Generate SQL from natural language
 
 def generate_sql_from_nl(question):
     """Generate SQL from natural language with rate limiting"""
@@ -301,18 +295,18 @@ def generate_sql_from_nl(question):
     cleaned_question = clean_user_question(question)
     
     # Check for HF_TOKEN
-    hf_token = os.environ.get('HF_TOKEN') or st.secrets.get('HF_TOKEN')
+    openrouter_token = os.environ.get('OPENROUTER_API_KEY') or st.secrets.get('OPENROUTER_API_KEY')
     
-    if not hf_token:
+    if not openrouter_token:
         st.error("""
         ❌ **API Token Required**
-        Add HF_TOKEN to your app secrets or use the SQL Query tab.
+        Add OPENROUTER_API_KEY to your app secrets or use the SQL Query tab.
         """)
         return None
     
     client = OpenAI(
-        base_url = "https://router.huggingface.co/v1",
-        api_key=os.environ['HF_TOKEN'],
+        base_url = "https://openrouter.ai/api/v1",
+        api_key=openrouter_token,
     )
     
     # Prompt for SQL generation
@@ -400,7 +394,7 @@ Generate ONLY the SQL query, no explanations."""
     
     try:
         completion = client.chat.completions.create(
-            model="meta-llama/Meta-Llama-3-8B-Instruct:groq",
+            model="meta-llama/llama-4-scout:free",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Generate SQL for: {cleaned_question}"}
@@ -421,7 +415,8 @@ Generate ONLY the SQL query, no explanations."""
             return final_sql
     
     except Exception as e:
-        st.error(f"❌ Error generating SQL: {e}")
+        st.error(f"❌ Detailed Error: {str(e)}")  
+        print(f"FULL ERROR: {e}")
         return None
 
 def execute_nl_generated_sql(sql_query):
