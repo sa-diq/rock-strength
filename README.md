@@ -14,7 +14,7 @@ This innovative project tests the hypothesis that **rock failure strength can be
 <br>
 <br>
 
-[LINK TO THE TOOL](https://qp-digitiser.streamlit.app/)
+[LINK TO THE PLOT DIGITISATION TOOL](https://qp-digitiser.streamlit.app/)
 <br>
 <br>
 ![Digitisation Process Flow](assets/digitisation_flow_process.gif)
