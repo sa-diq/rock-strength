@@ -71,7 +71,7 @@ If you use this tool in your research, please cite:
   title={Q-P Plot Digitizer: A Tool for Rock Mechanics Data Extraction},
   author={[Sadiq Balogun] and [Dave Healy]},
   year={2024},
-  url={https://github.com/sa-diq/rock-density},
+  url={https://github.com/sa-diq/rock-strength},
   note={School of Earth \& Environment, LIDA, British Geological Survey}
 }
 ```
