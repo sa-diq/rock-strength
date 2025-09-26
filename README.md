@@ -5,7 +5,7 @@ A data mining tool for extracting rock mechanics data from published research pa
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.28+-red.svg)](https://streamlit.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-v17-blue)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
 ## Project Overview
@@ -87,4 +87,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 This project links collaborators from:
 - **School of Earth & Environment** 
 - **Leeds Institute for Data Analytics (LIDA)**
-- **British Geological Survey (BGS)**
+
+## Contact
+
+- **Sadiq Balogun** – [ballosadiq@gmail.com](mailto:ballosadiq@gmail.com)  
+- **Dave Healy** – [d.healy@leeds.ac.uk](mailto:d.healy@leeds.ac.uk)
